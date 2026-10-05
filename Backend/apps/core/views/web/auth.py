@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 
-from apps.core.serializers.auth import LoginSerializer, UserRegisterSerializer
+from apps.core.serializers.auth import LoginSerializer, UserRegisterSerializer, LogoutSerializer
 
 
 
@@ -101,4 +101,21 @@ class UserRegisterView(APIView):
                 }
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            {
+                "message": "Logout successful."
+            },
+            status=status.HTTP_200_OK
         )
