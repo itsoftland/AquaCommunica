@@ -5,6 +5,8 @@ from apps.core.views.web import auth
 
 urlpatterns = [
     # authemtication urls
-    path('auth/login/', auth.LoginView.as_view(), name="login"),
-    path('auth/token/refresh', TokenRefreshView.as_view(), name="token_refresh"),
+    path('login/', auth.LoginView.as_view(), name="login"),
+    path('token/refresh/', TokenRefreshView.as_view(), name="token_refresh"),
+    path('user-profile/', auth.ProfileView.as_view(), name="user_profile"),
+    path('create-user/', auth.UserRegisterView.as_view(), name="user_registration"),
 ]

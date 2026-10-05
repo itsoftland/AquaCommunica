@@ -1,4 +1,4 @@
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, get_user_model
 
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -45,3 +45,78 @@ class LoginSerializer(serializers.Serializer):
             "refresh": str(refresh),
             "access": str(refresh.access_token),
         }
+
+
+
+User = get_user_model()
+
+
+class UserRegisterSerializer(serializers.ModelSerializer):
+
+    password = serializers.CharField(
+        write_only=True,
+        min_length=6,
+        style={"input_type": "password"},
+    )
+
+    password_confirm = serializers.CharField(
+        write_only=True,
+        style={"input_type": "password"},
+    )
+
+    class Meta:
+
+        model = User
+        fields = [
+            "email",
+            "password",
+            "password_confirm",
+            "role",
+            "dealer",
+            "parent",
+        ]
+
+    def validate_email(self, email):
+
+        email = email.lower().strip()
+
+        if User.objects.filter(email=email).exists():
+            raise serializers.ValidationError(
+               { "A user with this email already exists."}
+            )
+
+
+        return email
+
+
+    def validate(self, attrs):
+
+        password = attrs.get("password")
+        password_confirm = attrs.get("password_confirm")
+
+        if password != password_confirm:
+            raise serializers.ValidationError(
+                {
+                    "password_confirm": "Passwords do not match."
+                }
+            )
+
+        return attrs
+
+
+    def create(self, validated_data):
+
+        # Remove password_confirm because it is
+        # only used for validation
+        validated_data.pop("password_confirm")
+
+        # Remove password so we can hash it properly
+        password = validated_data.pop("password")
+
+        # Use CustomUserManager.create_user()
+        user = User.objects.create_user(
+            password=password,
+            **validated_data
+        )
+
+        return user

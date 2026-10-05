@@ -1,10 +1,10 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 
 
-from apps.core.serializers.auth import LoginSerializer
+from apps.core.serializers.auth import LoginSerializer, UserRegisterSerializer
 
 
 
@@ -46,4 +46,59 @@ class LoginView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-        
+
+
+
+class ProfileView(APIView):
+
+    permission_classes = [IsAuthenticated,]
+
+    def get(self, request):
+
+        user = request.user
+
+        user_details = {
+            "id": user.id,
+            "email": user.email,
+            "role": user.role,
+            "is_verified": user.is_verified,
+        }
+
+        return Response(
+            {
+                "message": "You are authenticated",
+                "user": user_details,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+
+class UserRegisterView(APIView):
+
+    permission_classes = [AllowAny, ]
+
+    def post(self, request):
+
+        data = request.data
+
+        serializer = UserRegisterSerializer(
+            data=data
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.save()
+
+        return Response(
+            {
+                "message": "user created successfully.",
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "role": user.role,
+                    "is_verified": user.is_verified,
+                }
+            },
+            status=status.HTTP_201_CREATED,
+        )
