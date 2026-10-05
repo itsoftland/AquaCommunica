@@ -2,7 +2,10 @@ from django.contrib.auth import authenticate, get_user_model
 
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+
+from apps.core.authentication import session_error_message
 
 
 
@@ -39,7 +42,11 @@ class LoginSerializer(serializers.Serializer):
                 "Your account is not verified."
             )
 
+        # A new session invalidates tokens issued to any other device.
+        session_id = user.start_new_session()
+
         refresh = RefreshToken.for_user(user)
+        refresh["session_id"] = session_id
 
         return {
             "user": user,
@@ -123,6 +130,22 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+class SessionTokenRefreshSerializer(TokenRefreshSerializer):
+
+    def validate(self, attrs):
+        try:
+            refresh = RefreshToken(attrs["refresh"])
+        except TokenError as e:
+            raise InvalidToken(e.args[0])
+
+        user = User.objects.filter(pk=refresh.get("user_id")).first()
+        message = session_error_message(user, refresh)
+        if message:
+            raise InvalidToken(message)
+
+        return super().validate(attrs)
+
+
 class LogoutSerializer(serializers.Serializer):
 
     refresh = serializers.CharField()
@@ -138,6 +161,10 @@ class LogoutSerializer(serializers.Serializer):
         try:
             refresh_token = RefreshToken(self.token)
             refresh_token.blacklist()
+            user_id = refresh_token.get("user_id")
+            user = User.objects.filter(pk=user_id).first()
+            if user and user.session_id == refresh_token.get("session_id"):
+                user.end_session()
         except TokenError:
             raise serializers.ValidationError(
                 {"refresh": "Invalid or expired refresh token."}

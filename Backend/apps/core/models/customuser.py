@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
@@ -60,6 +62,9 @@ class CustomUser(AbstractUser):
 
     is_verified = models.BooleanField(default=False)
 
+    # Identifies the single active login session; embedded in every JWT.
+    session_id = models.CharField(max_length=64, null=True, blank=True, editable=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     updated_at = models.DateTimeField(auto_now=True)
@@ -115,6 +120,15 @@ class CustomUser(AbstractUser):
                 "dealer": "A user cannot be their own dealer."
             })
 
+
+    def start_new_session(self):
+        self.session_id = uuid.uuid4().hex
+        self.save(update_fields=["session_id"])
+        return self.session_id
+
+    def end_session(self):
+        self.session_id = None
+        self.save(update_fields=["session_id"])
 
     def __str__(self):
         return f"{self.email} ({self.role})"
