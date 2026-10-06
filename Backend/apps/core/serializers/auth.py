@@ -81,7 +81,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             "password_confirm",
             "role",
             "dealer",
-            "parent",
+            "user_admin",
         ]
 
     def validate_email(self, email):
@@ -96,6 +96,67 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
         return email
 
+
+    def validate_role(self, role):
+
+        request = self.context.get("request")
+
+        user = request.user
+        created_by_role = user.role
+
+
+        if user.is_superadmin:
+
+            allowed_roles = [
+                "executive",
+                "dealer",
+                "production",
+                "user_admin",
+            ]
+
+            if role not in allowed_roles:
+
+                raise serializers.ValidationError(
+                    {
+                        f'you cant create {role} user'
+                    }
+                )
+            
+        elif created_by_role in ["executive", "dealer" ]:
+
+            if role != "user_admin":
+
+                raise serializers.ValidationError(
+                    {
+                        f'you cant create {role} user'
+                    }
+                )
+            
+        elif user.is_user_admin:
+
+            allowed_roles = [
+                "parent_user", 
+                "child_user",
+            ]
+
+            if role not in allowed_roles:
+
+                raise serializers.ValidationError(
+                    {
+                        f'you cant create {role} user'
+                    }
+                )
+            
+        elif created_by_role in   ["parent_user" , "child_user" , "production"]:
+
+            raise serializers.ValidationError(
+                {
+                    "you dont have permission to create user"
+                }
+            )
+
+        return role
+    
 
     def validate(self, attrs):
 
@@ -121,9 +182,14 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         # Remove password so we can hash it properly
         password = validated_data.pop("password")
 
+        request = self.context.get("request")
+
+        created_by = request.user if request else None
+
         # Use CustomUserManager.create_user()
         user = User.objects.create_user(
             password=password,
+            created_by=created_by,
             **validated_data
         )
 

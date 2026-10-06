@@ -76,14 +76,15 @@ class ProfileView(APIView):
 
 class UserRegisterView(APIView):
 
-    permission_classes = [AllowAny, ]
+    permission_classes = [IsAuthenticated, ]
 
     def post(self, request):
 
         data = request.data
 
         serializer = UserRegisterSerializer(
-            data=data
+            data=data,
+            context={"request": request},
         )
 
         serializer.is_valid(raise_exception=True)
@@ -98,6 +99,7 @@ class UserRegisterView(APIView):
                     "email": user.email,
                     "role": user.role,
                     "is_verified": user.is_verified,
+                    "created_by": user.created_by.email,
                 }
             },
             status=status.HTTP_201_CREATED,
