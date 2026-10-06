@@ -36,6 +36,7 @@ class UserProfile(models.Model):
         max_length=6,
         unique=True,
         blank=True,
+        null=True
     )
 
     # =========================================================
@@ -227,6 +228,11 @@ class UserProfile(models.Model):
                 "Total users + total devices cannot be more "
                 "than total licence units."
             )
+
+        if self.dealer and self.dealer.role != "dealer":
+            raise ValidationError({
+                "dealer": "Assigned user must be a dealer."
+            })
 
     # =========================================================
     # STRING REPRESENTATION
