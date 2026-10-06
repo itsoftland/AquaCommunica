@@ -15,6 +15,7 @@ class CustomUser(AbstractUser):
         EXECUTIVE = "executive", "Executive"
         DEALER = "dealer", "Dealer"
         PRODUCTION = "production", "Production"
+        USER_ADMIN = "user_admin", "User Admin"
         PARENT_USER = "parent_user", "Parent User"
         CHILD_USER = "child_user", "Child User"
 
@@ -41,13 +42,13 @@ class CustomUser(AbstractUser):
         limit_choices_to={"role": "dealer"},
     )
 
-    parent = models.ForeignKey(
+    user_admin = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="child_users",
-        limit_choices_to={"role": "parent_user"},
+        related_name="managed_users",
+        limit_choices_to={"role": "user_admin"},
     )
 
     created_by = models.ForeignKey(
@@ -105,14 +106,14 @@ class CustomUser(AbstractUser):
                 "dealer": "Assigned user must be a dealer."
             })
 
-        if self.parent and self.parent.role != self.Role.PARENT_USER:
+        if self.user_admin and self.user_admin.role != self.Role.USER_ADMIN:
             raise ValidationError({
-                "parent": "Parent must have the parent_user role."
+                "user_admin": "user_admin must have the user_admin role."
             })
 
-        if self.parent and self.parent_id == self.pk:
+        if self.user_admin and self.user_admin_id == self.pk:
             raise ValidationError({
-                "parent": "A user cannot be their own parent."
+                "user_admin": "A user cannot be their own user_admin."
             })
 
         if self.dealer and self.dealer_id == self.pk:
@@ -137,6 +138,22 @@ class CustomUser(AbstractUser):
     @property
     def is_superadmin(self):
         return self.role == self.Role.SUPERADMIN
+    
+    @property
+    def is_executive(self):
+        return self.role == self.Role.EXECUTIVE
+
+    @property
+    def is_dealer(self):
+        return self.role == self.Role.DEALER
+
+    @property
+    def is_production(self):
+        return self.role == self.Role.PRODUCTION
+    
+    @property
+    def is_user_admin(self):
+        return self.role == self.Role.USER_ADMIN
 
     @property
     def is_parent_user(self):
@@ -145,8 +162,4 @@ class CustomUser(AbstractUser):
     @property
     def is_child_user(self):
         return self.role == self.Role.CHILD_USER
-
-    @property
-    def is_dealer(self):
-        return self.role == self.Role.DEALER
 
