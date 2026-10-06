@@ -1,1 +1,2 @@
-from apps.core.models.customuser import CustomUser
+from .customuser import CustomUser
+from .profiles import UserProfile
