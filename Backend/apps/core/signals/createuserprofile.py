@@ -12,10 +12,8 @@ def create_user_profile(sender, instance, created, **kwargs):
     if created and instance.role == CustomUser.Role.USER_ADMIN:
 
         created_by_instance = instance.created_by
-        print("===============================================")
-        print(created_by_instance)
-        print("===============================================")
         dealer_instance = instance.dealer
+
         if dealer_instance is not None:
             client_type = "dealer"
         else:

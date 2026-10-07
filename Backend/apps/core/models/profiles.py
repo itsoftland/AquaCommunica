@@ -229,6 +229,11 @@ class UserProfile(models.Model):
                 "than total licence units."
             )
 
+        if self.total_user_count < (self.parent_user_count + self.child_user_count):
+            raise ValidationError(
+                "Total parent user + total child user can't be more than total user count"
+            )
+
         if self.dealer and self.dealer.role != "dealer":
             raise ValidationError({
                 "dealer": "Assigned user must be a dealer."
