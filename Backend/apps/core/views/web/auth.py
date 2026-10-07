@@ -1,9 +1,9 @@
 from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 
+from ...utlis.responses import success_response
 from apps.core.serializers.auth import LoginSerializer, UserRegisterSerializer, LogoutSerializer
 
 
@@ -33,18 +33,15 @@ class LoginView(APIView):
         }
 
 
-        return Response(
+        return success_response(
+            "Login successful",
             {
-                "message": "Login successful",
-
                 "user": user_details,
-
                 "tokens": {
                     "refresh": data["refresh"],
                     "access": data["access"],
                 },
             },
-            status=status.HTTP_200_OK,
         )
 
 
@@ -64,12 +61,9 @@ class ProfileView(APIView):
             "is_verified": user.is_verified,
         }
 
-        return Response(
-            {
-                "message": "You are authenticated",
-                "user": user_details,
-            },
-            status=status.HTTP_200_OK,
+        return success_response(
+            "You are authenticated",
+            {"user": user_details},
         )
 
 
@@ -91,9 +85,9 @@ class UserRegisterView(APIView):
 
         user = serializer.save()
 
-        return Response(
+        return success_response(
+            "User created successfully.",
             {
-                "message": "user created successfully.",
                 "user": {
                     "id": user.id,
                     "email": user.email,
@@ -115,9 +109,4 @@ class LogoutView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        return Response(
-            {
-                "message": "Logout successful."
-            },
-            status=status.HTTP_200_OK
-        )
+        return success_response("Logout successful.")

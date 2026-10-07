@@ -52,6 +52,9 @@ AUTH_USER_MODEL = "core.CustomUser"
 
 
 REST_FRAMEWORK = {
+    "EXCEPTION_HANDLER": (
+        "apps.core.exceptions.custom_exception_handler"
+    ),
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "apps.core.authentication.SingleSessionJWTAuthentication",
     ),
