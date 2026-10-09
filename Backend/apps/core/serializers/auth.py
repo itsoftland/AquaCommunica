@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth import authenticate, get_user_model
 
 from rest_framework import serializers
@@ -7,6 +9,8 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 
 from apps.core.authentication import session_error_message
 
+
+log_auth = logging.getLogger('aquacommunica.authlog')
 
 
 class LoginSerializer(serializers.Serializer):
@@ -28,16 +32,22 @@ class LoginSerializer(serializers.Serializer):
         )
 
         if not user:
+
+            log_auth.info("login failed due to Invalid email or password. | email=%s", email)
             raise serializers.ValidationError(
                 "Invalid email or password."
             )
 
         if not user.is_active:
+
+            log_auth.info("login failed due to account is inactive. | email=%s", email)
             raise serializers.ValidationError(
                 "Your account is inactive."
             )
 
         if not user.is_verified:
+
+            log_auth.info("login failed due to account is not verified | email=%s", email)
             raise serializers.ValidationError(
                 "Your account is not verified."
             )
@@ -89,6 +99,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         email = email.lower().strip()
 
         if User.objects.filter(email=email).exists():
+
+            log_auth.info("Registration fail - email already exist | email=%s", email)
             raise serializers.ValidationError(
                { "A user with this email already exists."}
             )
@@ -116,9 +128,11 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
             if role not in allowed_roles:
 
+                log_auth.info("Registration fail - don't have permission to create %s", role)
+
                 raise serializers.ValidationError(
                     {
-                        f'you cant create {role} user'
+                        f"you can't create {role} user"
                     }
                 )
             
@@ -126,9 +140,11 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
             if role != "user_admin":
 
+                log_auth.info("Registration fail - don't have permission to create %s", role)
+
                 raise serializers.ValidationError(
                     {
-                        f'you cant create {role} user'
+                        f"you can't create {role} user"
                     }
                 )
             
@@ -141,13 +157,17 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
             if role not in allowed_roles:
 
+                log_auth.info("Registration fail - don't have permission to create %s", role)
+
                 raise serializers.ValidationError(
                     {
-                        f'you cant create {role} user'
+                        f"you can't create {role} user"
                     }
                 )
             
         elif created_by_role in   ["parent_user" , "child_user" , "production"]:
+
+            log_auth.info("Registration fail - don't have permission to create user")
 
             raise serializers.ValidationError(
                 {
@@ -164,6 +184,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         password_confirm = attrs.get("password_confirm")
 
         if password != password_confirm:
+
+            log_auth.info("Registration failed due to password do not match")
             raise serializers.ValidationError(
                 {
                     "password_confirm": "Passwords do not match."

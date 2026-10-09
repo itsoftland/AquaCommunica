@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
+import os
 
 from pathlib import Path
 from datetime import timedelta
@@ -113,6 +114,93 @@ DATABASES = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
+}
+
+
+# =========================================================
+# LOGGING
+# =========================================================
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+
+    # =========================
+    # FORMATTERS
+    # =========================
+    "formatters": {
+
+        "profile_formatter": {
+            "format": "{asctime} | {levelname} | {name} | {message}",
+            "style": "{",
+        },
+
+        "auth_formatter": {
+            "format": "{asctime} | {levelname} | {name} | {message}",
+            "style": "{",
+        },
+    },
+
+    # =========================
+    # HANDLERS
+    # =========================
+    "handlers": {
+
+        # Profile console
+        "profile_console": {
+            "class": "logging.StreamHandler",
+            "formatter": "profile_formatter",
+        },
+
+        # Profile file
+        "profile_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "profile.log",
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 10,
+            "formatter": "profile_formatter",
+        },
+
+        # Authentication console
+        "auth_console": {
+            "class": "logging.StreamHandler",
+            "formatter": "auth_formatter",
+        },
+
+        # Authentication file
+        "auth_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "authentication.log",
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 10,
+            "formatter": "auth_formatter",
+        },
+    },
+
+    # =========================
+    # LOGGERS
+    # =========================
+    "loggers": {
+
+        # Profile logger
+        "aquacommunica.profilelog": {
+            "handlers": [
+                "profile_console",
+                "profile_file",
+            ],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        # Authentication logger
+        "aquacommunica.authlog": {
+            "handlers": [
+                "auth_console",
+                "auth_file",
+            ],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
 }
 
 
