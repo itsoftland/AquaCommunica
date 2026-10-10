@@ -12,6 +12,7 @@ log_auth = logging.getLogger('aquacommunica.authlog')
 
 
 class LoginView(APIView):
+    """Authenticate a user and return their profile details with JWT tokens."""
 
     permission_classes = [AllowAny, ]
 
@@ -61,6 +62,7 @@ class LoginView(APIView):
 
 
 class ProfileView(APIView):
+    """Return the authenticated user's profile details."""
 
     permission_classes = [IsAuthenticated,]
 
@@ -83,6 +85,7 @@ class ProfileView(APIView):
 
 
 class UserRegisterView(APIView):
+    """Create a user account and return the new user's details."""
 
     permission_classes = [IsAuthenticated, ]
 
@@ -128,6 +131,8 @@ class UserRegisterView(APIView):
 
 
 class LogoutView(APIView):
+    """Log out the authenticated user by invalidating their refresh token."""
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
