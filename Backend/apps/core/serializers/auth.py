@@ -3,6 +3,7 @@ import logging
 from django.contrib.auth import authenticate, get_user_model
 
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
@@ -34,21 +35,21 @@ class LoginSerializer(serializers.Serializer):
         if not user:
 
             log_auth.info("login failed due to Invalid email or password. | email=%s", email)
-            raise serializers.ValidationError(
+            raise AuthenticationFailed(
                 "Invalid email or password."
             )
 
         if not user.is_active:
 
             log_auth.info("login failed due to account is inactive. | email=%s", email)
-            raise serializers.ValidationError(
+            raise PermissionDenied(
                 "Your account is inactive."
             )
 
         if not user.is_verified:
 
             log_auth.info("login failed due to account is not verified | email=%s", email)
-            raise serializers.ValidationError(
+            raise PermissionDenied(
                 "Your account is not verified."
             )
 
@@ -130,10 +131,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
                 log_auth.info("Registration fail - don't have permission to create %s", role)
 
-                raise serializers.ValidationError(
-                    {
-                        f"you can't create {role} user"
-                    }
+                raise PermissionDenied(
+                    f"you can't create {role} user"
                 )
             
         elif created_by_role in ["executive", "dealer" ]:
@@ -142,10 +141,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
                 log_auth.info("Registration fail - don't have permission to create %s", role)
 
-                raise serializers.ValidationError(
-                    {
-                        f"you can't create {role} user"
-                    }
+                raise PermissionDenied(
+                    f"you can't create {role} user"
                 )
             
         elif user.is_user_admin:
@@ -159,17 +156,15 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
                 log_auth.info("Registration fail - don't have permission to create %s", role)
 
-                raise serializers.ValidationError(
-                    {
-                        f"you can't create {role} user"
-                    }
+                raise PermissionDenied(
+                    f"you can't create {role} user"
                 )
             
         elif created_by_role in   ["parent_user" , "child_user" , "production"]:
 
             log_auth.info("Registration fail - don't have permission to create user")
 
-            raise serializers.ValidationError(
+            raise PermissionDenied(
                 {
                     "you dont have permission to create user"
                 }
