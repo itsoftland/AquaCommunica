@@ -245,3 +245,228 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.profile_id} - {self.user.email}"
+
+
+
+class DealerProfile(models.Model):
+
+    # =========================================================
+    # CHOICES
+    # =========================================================
+
+    class AuthStatus(models.TextChoices):
+        PENDING = "Pending", "Pending"
+        VALIDATING = "Validating", "Validating"
+        APPROVED = "Approved", "Approved"
+        EXPIRED = "Expired", "Expired"
+        BLOCKED = "Blocked", "Blocked"
+
+
+    # =========================================================
+    # USER / PROFILE IDENTIFICATION
+    # =========================================================
+
+    user = models.OneToOneField(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name="dealer_profile",
+        limit_choices_to={"role": "dealer"},
+    )
+
+    profile_id = models.CharField(
+        max_length=6,
+        unique=True,
+        blank=True,
+        null=True
+    )
+
+    # =========================================================
+    # PERSONAL INFORMATION
+    # =========================================================
+
+    first_name = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    last_name = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    phone_number = models.CharField(
+        max_length=20,
+        blank=True,
+    )
+
+    contact_email = models.EmailField(
+        max_length=255,
+        blank=True,
+    )
+
+    # =========================================================
+    # ADDRESS INFORMATION
+    # =========================================================
+
+    address = models.TextField(
+        blank=True,
+    )
+
+    city = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    state = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    pincode = models.CharField(
+        max_length=10,
+        blank=True,
+    )
+ 
+    # =========================================================
+    # BUSINESS INFORMATION
+    # =========================================================
+
+    gst_number = models.CharField(
+        max_length=20,
+        blank=True,
+    )
+
+    # =========================================================
+    # AUTHENTICATION / ACCOUNT STATUS
+    # =========================================================
+
+    authentication_status = models.CharField(
+        max_length=25,
+        choices=AuthStatus.choices,
+        default=AuthStatus.PENDING,
+        db_index=True,
+    )
+
+    is_profile_active = models.BooleanField(
+        default=False,
+    )
+
+    # =========================================================
+    # VALIDITY
+    # =========================================================
+
+    validity_from_date = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    validity_to_date = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    # =========================================================
+    # LICENSE / USAGE
+    # =========================================================
+
+    total_licence_unit = models.PositiveIntegerField(
+        default=0,
+    )
+
+    total_user_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    parent_user_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    child_user_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    total_device_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    # =========================================================
+    # AUDIT INFORMATION
+    # =========================================================
+
+    created_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_dealer_profiles",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+
+    # =========================================================
+    # META CONFIGURATION
+    # =========================================================
+
+    class Meta:
+        
+        verbose_name = "Dealer Profile"
+        verbose_name_plural = "Dealer Profiles"
+        ordering = ["-created_at"]
+        db_table = "dealer_profile"
+
+        indexes = [
+            models.Index(
+                fields=["authentication_status"],
+                name="dealer_auth_status_idx",
+            ),
+            models.Index(
+                fields=["is_profile_active"],
+                name="dealer_active_idx",
+            ),
+            models.Index(
+                fields=["validity_to_date"],
+                name="dealer_valid_to_idx",
+            ),
+            models.Index(
+                fields=["created_at"],
+                name="dealer_created_at_idx",
+            ),
+        ]
+
+    # =========================================================
+    # VALIDATION
+    # =========================================================
+
+    def clean(self):
+        super().clean()
+
+        total_usage = (
+            self.total_user_count +
+            self.total_device_count
+        )
+
+        if total_usage > self.total_licence_unit:
+            raise ValidationError(
+                "Total users + total devices cannot be more "
+                "than total licence units."
+            )
+
+        if self.total_user_count < (self.parent_user_count + self.child_user_count):
+            raise ValidationError(
+                "Total parent user + total child user can't be more than total user count"
+            )
+
+    # =========================================================
+    # STRING REPRESENTATION
+    # =========================================================
+
+    def __str__(self):
+        return f"{self.profile_id} - {self.user.email}"
+    

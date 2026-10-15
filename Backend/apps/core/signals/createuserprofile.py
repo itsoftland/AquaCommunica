@@ -5,7 +5,7 @@ from django.dispatch import receiver
 
 
 from ..models.customuser import CustomUser
-from ..models.profiles import UserProfile
+from ..models.profiles import UserProfile, DealerProfile
 
 
 log_profile = logging.getLogger('aquacommunica.profilelog')
@@ -22,31 +22,41 @@ def create_user_profile(sender, instance, created, **kwargs):
         created,
     )
 
-    if created and instance.role == CustomUser.Role.USER_ADMIN:
+    if created: 
 
         created_by_instance = instance.created_by
-        dealer_instance = instance.dealer
+        
+        if instance.role == CustomUser.Role.USER_ADMIN:
 
-        if dealer_instance is not None:
-            client_type = "dealer"
-        else:
-            client_type = "direct"
-            dealer_instance = None
+            dealer_instance = instance.dealer
 
-        UserProfile.objects.create(
-            user=instance,
-            client_type=client_type,
-            dealer=dealer_instance,
-            created_by=created_by_instance,
-        )
+            if dealer_instance is not None:
+                client_type = "dealer"
+            else:
+                client_type = "direct"
+                dealer_instance = None
+
+            UserProfile.objects.create(
+                user=instance,
+                client_type=client_type,
+                dealer=dealer_instance,
+                created_by=created_by_instance,
+            )
+
+        elif instance.role == CustomUser.Role.DEALER:
+
+            DealerProfile.objects.create(
+                user=instance,
+                created_by=created_by_instance,
+            )
+
 
         log_profile.info(
-            "User Profile Created Successfully | "
-            "user_id=%s | eamail=%s",
+            "Profile Created Successfully | "
+            "user_id=%s | eamail=%s | role=%s",
             instance.id,
             instance.email,
+            instance.role,
         )
-
-        
 
 
