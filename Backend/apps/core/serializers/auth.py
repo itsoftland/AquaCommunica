@@ -203,10 +203,16 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
         created_by = request.user if request else None
 
+        if created_by.role == "dealer":
+            dealer = request.user
+        else:
+            dealer = None
+
         # Use CustomUserManager.create_user()
         user = User.objects.create_user(
             password=password,
             created_by=created_by,
+            dealer=dealer,
             **validated_data
         )
 
