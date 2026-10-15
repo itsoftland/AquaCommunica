@@ -20,4 +20,5 @@ from django.urls import path, include
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('AQUACOMMUNICA/web/core/', include('apps.core.urls')),
+    path('AQUACOMMUNICA/license-server/', include('apps.core.license_urls')),
 ]
