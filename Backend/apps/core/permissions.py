@@ -60,3 +60,33 @@ class CanDeleteUser(BasePermission):
         raise PermissionDenied(
             "You can manage only users created by you."
         )
+
+
+class CanManageUserProfiles(BasePermission):
+    """
+    Superadmin can update any user.
+    Dealer can update only user_admin accounts created by them.
+    """
+    def has_permission(self, request, view):
+        user = request.user
+
+        return (
+            user.is_authenticated and
+            user.role in ["superadmin", "dealer"]
+        )
+
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+
+        if user.role == "superadmin":
+            return True
+
+        if user.role == "dealer":
+
+            return (
+                obj.created_by_id == user.id
+            )
+
+        raise PermissionDenied(
+            "You dont have permission to update this profile"
+        )
