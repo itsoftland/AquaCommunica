@@ -59,6 +59,16 @@ class SoftDeleteUser(APIView):
         user.is_active = False
         user.save(update_fields=["is_active"])
 
+        if user.role == "user_admin":
+            profile = user.user_profile
+            profile.is_profile_active = False
+            profile.save(update_fields=["is_profile_active"])
+
+        if user.role == "dealer":
+            profile = user.dealer_profile
+            profile.is_profile_active = False
+            profile.save(update_fields=["is_profile_active"])
+
         return success_response(
             "User deactivated successfully.",
             status=status.HTTP_200_OK,
