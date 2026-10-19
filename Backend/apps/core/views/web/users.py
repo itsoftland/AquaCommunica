@@ -8,7 +8,7 @@ from ...utlis.responses import error_response, success_response
 from ...permissions import CanDeleteUser
 
 
-class HardDeleteUser(APIView):
+class PermanentUserDelete(APIView):
 
     permission_classes = [IsAuthenticated, CanDeleteUser, ]
 
