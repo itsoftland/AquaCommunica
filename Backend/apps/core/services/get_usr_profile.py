@@ -1,4 +1,4 @@
-from ..models.profiles import UserProfile
+from ..models.profiles import UserProfile, CustomUser
 
 
 def get_user_profile(pk):
@@ -9,3 +9,8 @@ def get_user_profile(pk):
     user_profile = UserProfile.objects.get(pk=pk)
     return user_profile
    
+
+def get_user(pk):
+
+    user = CustomUser.objects.get(pk=pk)
+    return user
