@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
@@ -6,6 +8,9 @@ from ...services.get_usr_profile import get_user
 from ...models.customuser import CustomUser
 from ...utlis.responses import error_response, success_response
 from ...permissions import CanDeleteUser
+
+
+action_log = logging.getLogger('aquacommunica.action.log')
 
 
 class PermanentUserDelete(APIView):
@@ -35,5 +40,10 @@ class PermanentUserDelete(APIView):
 
 
 
-        
+class UpdateUserDetails(APIView):
 
+    permission_classes = [IsAuthenticated, ]
+
+    def put(self, request):
+
+        data = request.data

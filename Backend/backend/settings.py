@@ -140,6 +140,11 @@ LOGGING = {
             "format": "{asctime} | {levelname} | {name} | {message}",
             "style": "{",
         },
+
+        "action_formatter": {
+            "format": "{asctime} | {levelname} | {name} | {message}",
+            "style": "{",
+        },
     },
 
     # =========================
@@ -176,6 +181,21 @@ LOGGING = {
             "backupCount": 10,
             "formatter": "auth_formatter",
         },
+
+        # Action console
+        "action_console": {
+            "class": "logging.StreamHandler",
+            "formatter": "action_formatter",
+        },
+
+         # Action file
+        "action_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "action.log",
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 10,
+            "formatter": "action_formatter",
+        },
     },
 
     # =========================
@@ -198,6 +218,16 @@ LOGGING = {
             "handlers": [
                 "auth_console",
                 "auth_file",
+            ],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        # Action Logger
+        "aquacommunica.action.log": {
+            "handlers": [
+                "action_console", 
+                "action_file"
             ],
             "level": "INFO",
             "propagate": False,
