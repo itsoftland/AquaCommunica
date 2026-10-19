@@ -12,7 +12,10 @@ urlpatterns = [
     path('create-user/', auth.UserRegisterView.as_view(), name="user_registration"),
     path('logout/', auth.LogoutView.as_view(), name="logout"),
 
+    #user urls
     path('user/<int:pk>/hard-delete/', users.PermanentUserDelete.as_view(), name="user_hard_delete"),
+    path('user/<int:pk>/soft-delete/', users.SoftDeleteUser.as_view(), name="user_soft_delete"),
 
+    #user profile urls
     path('userprofile/<int:pk>/update/', profile.UpdateUserProfile.as_view(), name="update_user_profile"),
 ]

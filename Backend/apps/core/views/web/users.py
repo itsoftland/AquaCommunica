@@ -38,4 +38,30 @@ class PermanentUserDelete(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-          
+
+class SoftDeleteUser(APIView):
+
+    permission_classes = [IsAuthenticated, CanDeleteUser, ]
+
+    def patch(self, request, pk):
+
+        try:
+            user = get_user(pk)
+        except CustomUser.DoesNotExist:
+
+            return error_response(
+                f"User with ID = {pk} not found",
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        self.check_object_permissions(request, user)
+
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+
+        return success_response(
+            "User deactivated successfully.",
+            status=status.HTTP_200_OK,
+        )
+
+
