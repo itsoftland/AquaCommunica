@@ -38,12 +38,4 @@ class PermanentUserDelete(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-
-
-class UpdateUserDetails(APIView):
-
-    permission_classes = [IsAuthenticated, ]
-
-    def put(self, request):
-
-        data = request.data
+          
