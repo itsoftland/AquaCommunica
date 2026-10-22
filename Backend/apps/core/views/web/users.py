@@ -4,10 +4,11 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 
+from ...permissions import CanDeleteUser
 from ...services.get_usr_profile import get_user
 from ...models.customuser import CustomUser
+from ...serializers.users import ChangePasswordSerializer
 from ...utlis.responses import error_response, success_response
-from ...permissions import CanDeleteUser
 
 
 action_log = logging.getLogger('aquacommunica.action.log')
@@ -75,3 +76,21 @@ class SoftDeleteUser(APIView):
         )
 
 
+class ChangePassword(APIView):
+
+    permission_classes = [IsAuthenticated, ]
+
+    def post(self, request):
+
+        serializer = ChangePasswordSerializer(
+            data=request.data,
+            context={"request": request}
+        )
+
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return success_response(
+            message="Password changed sucessfully",
+            status=status.HTTP_200_OK,
+        )
