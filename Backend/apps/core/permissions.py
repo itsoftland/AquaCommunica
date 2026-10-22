@@ -90,3 +90,11 @@ class CanManageUserProfiles(BasePermission):
         raise PermissionDenied(
             "You dont have permission to update this profile"
         )
+
+
+class IsSuperAdmin(BasePermission):
+
+    def has_permission(self, request, view):
+
+        user = request.user
+        return user.role == "superadmin"
