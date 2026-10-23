@@ -1,11 +1,29 @@
+import time
 import logging
 import requests
+from datetime import datetime
 
 from django.conf import settings
 
 
 log_license_server = logging.getLogger('aquacommunica.licenseserver')
 
+
+def check_datetime(date_str):
+    try:
+        if not date_str:
+            return None
+        if isinstance(date_str, str):
+            return datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
+        return date_str
+    except Exception:
+        return None
+
+
+def _parse_license_date(raw):
+    """Return the date part of a license server datetime string, or None on any failure."""
+    dt = check_datetime(raw)
+    return dt.date() if dt is not None else None
 
 
 def buid_license_registration_payload(profile):
@@ -155,3 +173,87 @@ def register_with_license_server(profile):
             'success': False,
             'error': f'Unexpected error: {str(e)}'
         }
+
+
+def poll_license_authentication(customer_id, timeout_sec=120, interval_sec=20):
+    # customer_id => given by ls from registration time
+
+    payload = {"CustomerId": customer_id}
+    start_time = time.time()
+    poll_count = 0
+
+
+    while time.time() - start_time < timeout_sec:
+
+        poll_count += 1
+
+        try: 
+            response = requests.post(
+                    settings.PRODUCT_AUTH_URL,
+                    json=payload,
+                    timeout=30
+                )
+
+            response.raise_for_status()
+                
+            data = response.json()
+            auth_status = data.get('Authenticationstatus', '')
+
+            # Success case
+            if auth_status == 'Approve':
+                
+                return {
+                    'success': True,
+                    'status': 'Approve',
+                    'data': data
+                }
+
+            # Expired license
+            if 'expired' in auth_status.lower():
+
+                return {
+                    'success': True,
+                    'status': 'Expired',
+                    'data': data
+                }
+
+            # Still waiting - continue polling
+            if 'waiting' in auth_status.lower() or auth_status == 'Pending':
+                
+                time.sleep(interval_sec)
+                continue
+
+             # Unknown status - treat as error
+            return {
+                'success': False,
+                'error': f'Unexpected authentication status: {auth_status}'
+            }
+
+        
+        except requests.exceptions.Timeout as e:
+            return {
+                'success': False,
+                'error': 'License server not responding. Please try again later.'
+            }
+        except requests.exceptions.ConnectionError as e:
+            return {
+                'success': False,
+                'error': 'Cannot connect to license server. Check your network connection.'
+            }
+        except requests.exceptions.HTTPError as e:
+            return {
+                'success': False,
+                'error': f'License server error: {e.response.status_code}. Try again later.'
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': 'Unexpected error during validation. Please try again.'
+            }
+
+    # Timeout
+    elapsed = time.time() - start_time
+    return {
+        'success': False,
+        'error': f'Validation timeout - License not approved yet. Please try again later. ({poll_count} attempts over {int(elapsed)}s)'
+    }

@@ -4,11 +4,16 @@ from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
+from django.db import transaction
+
 from ...utlis.responses import success_response, error_response
 from ...models.profiles import UserProfile, DealerProfile
 from ...services.license_server import register_with_license_server
 from ...services.get_usr_profile import get_user_profile
 from ...services.get_dlr_profile import get_dealer_profile
+from ...permissions import LicensePermission
+from ...task import poll_user_profile_license
+from ...serializers.profile import UserProfileDisplaySerializer
 
 
 log_license_server = logging.getLogger('aquacommunica.licenseserver')
@@ -16,7 +21,7 @@ log_license_server = logging.getLogger('aquacommunica.licenseserver')
 
 class RegisterUserProfileWithLicenseServer(APIView):
 
-    permission_classes = [IsAuthenticated,]
+    permission_classes = [IsAuthenticated, LicensePermission, ]
     
     def post(self, request, pk):
 
@@ -69,7 +74,7 @@ class RegisterUserProfileWithLicenseServer(APIView):
 
 class RegisterDealerProfileWithLicenseServer(APIView):
 
-    permission_classes = [IsAuthenticated, ]
+    permission_classes = [IsAuthenticated, LicensePermission, ]
 
     def post(self, request, pk):
 
@@ -119,3 +124,48 @@ class RegisterDealerProfileWithLicenseServer(APIView):
             data={"profile ID": dealer_profile.profile_id},
             status=status.HTTP_200_OK,
         )
+
+
+class ValidateUserProfileLicense(APIView):
+
+    permission_classes = [IsAuthenticated, LicensePermission, ]
+
+    def post(self, request, pk):
+
+        user = request.user
+
+        with transaction.atomic():
+            try:
+                profile = UserProfile.objects.get(pk=pk)
+            except UserProfile.DoesNotExist:
+                return error_response(
+                    message="Company not found.",
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if not profile.profile_id:
+                return error_response(
+                    message="Profile not registered with license server yet",
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if profile.authentication_status == UserProfile.AuthStatus.VALIDATING:
+                return success_response(
+                    message="License validation already in progress",
+                    status=status.HTTP_200_OK,
+                )
+
+            profile.authentication_status = UserProfile.AuthStatus.VALIDATING
+            profile.save()
+
+            poll_user_profile_license.delay(profile.id)
+
+            serializer = UserProfileDisplaySerializer(profile)
+
+            return success_response(
+                message="License validation started. This may take up to 2 minutes. Refresh to see updated status.",
+                data=serializer.data,
+                status=status.HTTP_200_OK,
+            )
+
+

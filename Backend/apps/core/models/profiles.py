@@ -39,6 +39,17 @@ class UserProfile(models.Model):
         null=True
     )
 
+    product_registration_id = models.IntegerField(
+        null=True, 
+        blank=True
+    )
+    
+    unique_identifier = models.CharField(
+        max_length=255, 
+        null=True, 
+        blank=True
+    )
+
     # =========================================================
     # PERSONAL INFORMATION
     # =========================================================
@@ -162,6 +173,14 @@ class UserProfile(models.Model):
 
     total_device_count = models.PositiveIntegerField(
         default=0,
+    )
+
+    # error_message: set when license validation hard-blocks (e.g. count inconsistency).
+    # Cleared on successful authentication or sync.
+    error_message = models.CharField(
+        max_length=500, 
+        null=True, 
+        blank=True,
     )
 
     # =========================================================

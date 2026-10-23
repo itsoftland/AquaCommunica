@@ -1,6 +1,8 @@
 from rest_framework.permissions import BasePermission
 from rest_framework.exceptions import PermissionDenied
 
+from django.utils import timezone
+
 
 class CanDeleteUser(BasePermission):
     """
@@ -98,3 +100,34 @@ class IsSuperAdmin(BasePermission):
 
         user = request.user
         return user.role == "superadmin"
+
+
+class LicensePermission(BasePermission):
+
+    def has_permission(self, request, view):
+
+        user = request.user
+
+        if not user or user.is_authenticated:
+            return True
+
+        if user.is_superadmin or user.role == "superadmin":
+            return True
+
+        profile = user.user_profile
+
+        if profile:
+            if not profile.is_profile_active:
+                self.message = "Profile is deactivated. Contact Administrator"
+                return False
+
+            if profile.validity_to_date and timezone.now().date() > profile.validity_to_date:
+                self.message = f'License Expired (ID: {profile.profile_id}). Contact Administrator.'
+                return False
+
+        dealer = getattr(user, 'assigned_users', None)
+        if dealer and not dealer.is_active:
+            self.message = 'Dealer account is deactivated. Contact Administrator.'
+            return False
+
+        return True
