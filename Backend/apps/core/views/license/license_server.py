@@ -132,24 +132,28 @@ class ValidateUserProfileLicense(APIView):
 
     def post(self, request, pk):
 
+        log_license_server.info(f"User Profile license validation started for id: {pk}")
         user = request.user
 
         with transaction.atomic():
             try:
                 profile = UserProfile.objects.get(pk=pk)
             except UserProfile.DoesNotExist:
+                log_license_server.info(f"User Profile not found for id: {pk}")
                 return error_response(
                     message="Company not found.",
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
             if not profile.profile_id:
+                log_license_server.warning(f"User Profile id: {pk} not registered with license server")
                 return error_response(
                     message="Profile not registered with license server yet",
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
             if profile.authentication_status == UserProfile.AuthStatus.VALIDATING:
+                log_license_server.info(f"License validation already in progress for id: {pk}")
                 return success_response(
                     message="License validation already in progress",
                     status=status.HTTP_200_OK,
@@ -159,6 +163,7 @@ class ValidateUserProfileLicense(APIView):
             profile.save()
 
             poll_user_profile_license.delay(profile.id)
+            log_license_server.info(f"License validation task queued for id: {pk}")
 
             serializer = UserProfileDisplaySerializer(profile)
 

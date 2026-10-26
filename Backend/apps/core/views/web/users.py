@@ -24,8 +24,14 @@ class PermanentUserDelete(APIView):
             user = get_user(pk)
 
             self.check_object_permissions(request, user)
-            
+
+            deleted_email = user.email
             user.delete()
+
+            action_log.info(
+                f"User permanently deleted: id={pk}, email={deleted_email}, "
+                f"deleted_by={request.user.id}"
+            )
 
             return success_response(
                 f"User permanently deleted successfully.",
@@ -33,6 +39,11 @@ class PermanentUserDelete(APIView):
             )
 
         except CustomUser.DoesNotExist:
+
+            action_log.warning(
+                f"Permanent delete failed, user not found: id={pk}, "
+                f"requested_by={request.user.id}"
+            )
 
             return error_response(
                 f"User with ID = {pk} not found",
@@ -49,6 +60,11 @@ class SoftDeleteUser(APIView):
         try:
             user = get_user(pk)
         except CustomUser.DoesNotExist:
+
+            action_log.warning(
+                f"Soft delete failed, user not found: id={pk}, "
+                f"requested_by={request.user.id}"
+            )
 
             return error_response(
                 f"User with ID = {pk} not found",
@@ -70,6 +86,11 @@ class SoftDeleteUser(APIView):
             profile.is_profile_active = False
             profile.save(update_fields=["is_profile_active"])
 
+        action_log.info(
+            f"User deactivated: id={pk}, email={user.email}, role={user.role}, "
+            f"deactivated_by={request.user.id}"
+        )
+
         return success_response(
             "User deactivated successfully.",
             status=status.HTTP_200_OK,
@@ -87,8 +108,21 @@ class ChangePassword(APIView):
             context={"request": request}
         )
 
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+
+            action_log.warning(
+                f"Password change failed, validation error: "
+                f"user_id={request.user.id}, errors={list(serializer.errors.keys())}"
+            )
+
+            serializer.is_valid(raise_exception=True)
+
         serializer.save()
+
+        action_log.info(
+            f"Password changed: user_id={request.user.id}, "
+            f"email={request.user.email}"
+        )
 
         return success_response(
             message="Password changed sucessfully",
