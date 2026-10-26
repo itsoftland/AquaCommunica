@@ -1,7 +1,11 @@
+import logging
+
 from celery import shared_task
 
 from .models.profiles import DealerProfile, UserProfile
 from .services.license_server import poll_license_authentication, _parse_license_date
+
+action_log = logging.getLogger('aquacommunica.action.log')
 
 
 @shared_task(bind=True, max_retries=3)
@@ -11,7 +15,7 @@ def poll_user_profile_license(self, pro_id: int) -> None:
         profile = UserProfile.objects.get(id=pro_id)
 
     except UserProfile.DoesNotExist:
-
+        action_log.warning(f"License poll skipped, profile not found: id={pro_id}")
         return
 
     is_dealer_user_profile = profile.client_type == UserProfile.ClientType.DEALER
@@ -20,6 +24,10 @@ def poll_user_profile_license(self, pro_id: int) -> None:
         auth_result = poll_license_authentication(profile.profile_id)
 
         if not auth_result['success']:
+            action_log.warning(
+                f"License poll failed, status set to pending: id={pro_id}, "
+                f"profile_id={profile.profile_id}"
+            )
 
             profile.authentication_status = UserProfile.AuthStatus.PENDING
             profile.save(update_fields=['authentication_status'])
@@ -63,11 +71,16 @@ def poll_user_profile_license(self, pro_id: int) -> None:
                 )
 
                 profile.save()
+                action_log.warning(
+                    f"License poll config error: id={pro_id}, "
+                    f"devices={total_device_count}, users={total_user_count}, "
+                    f"licensed_units={total_license_unit}"
+                )
                 return
 
             profile.product_registration_id = auth_data.get('ProductRegistrationId')
             profile.unique_identifier = auth_data.get('UniqueIDentifier')
-            profile.validity_from_date = _parse_license_date(auth_data.ger('ProductFromDate'))
+            profile.validity_from_date = _parse_license_date(auth_data.get('ProductFromDate'))
             profile.validity_to_date = _parse_license_date(auth_data.get('ProductToDate'))
 
 
@@ -80,7 +93,16 @@ def poll_user_profile_license(self, pro_id: int) -> None:
 
         profile.save()
 
+        action_log.info(
+            f"License poll completed: id={pro_id}, license_status={auth_status}, "
+            f"authentication_status={profile.authentication_status}"
+        )
+
     except Exception as exc:
+        action_log.error(
+            f"License poll error, retrying: id={pro_id}, error={exc}, "
+            f"attempt={self.request.retries + 1}/{self.max_retries}"
+        )
         raise self.retry(exc=exc, countdown=120)
 
     finally:
@@ -93,9 +115,7 @@ def poll_user_profile_license(self, pro_id: int) -> None:
             if profile.authentication_status == UserProfile.AuthStatus.VALIDATING:
                 profile.authentication_status = UserProfile.AuthStatus.PENDING
                 profile.save(update_fields=['authentication_status'])
+                action_log.warning(f"License poll reset VALIDATING to PENDING: id={pro_id}")
         except Exception as e:
-            print(e)
-            # log.error(f'[poll_company_license] Could not reset VALIDATING for {profile}: {e}')
-
-
-            
+            action_log.error(f"License poll could not reset VALIDATING: id={pro_id}, error={e}")
+    

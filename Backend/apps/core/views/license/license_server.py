@@ -141,7 +141,7 @@ class ValidateUserProfileLicense(APIView):
             except UserProfile.DoesNotExist:
                 log_license_server.info(f"User Profile not found for id: {pk}")
                 return error_response(
-                    message="Company not found.",
+                    message="user profile not found.",
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
