@@ -4,6 +4,10 @@ import requests
 from datetime import datetime
 
 from django.conf import settings
+from django.db.models import Count, Case, When, IntegerField
+
+from ..models.profiles import UserProfile, DealerProfile
+from ..models.customuser import CustomUser
 
 
 log_license_server = logging.getLogger('aquacommunica.licenseserver')
@@ -369,3 +373,60 @@ def _build_user_profile_sync_diff(profile, auth_data):
         },
         'error': error,
     }
+
+
+def _map_auth_status(raw_status, fallback):
+    """
+    Map the license server's free-text Authenticationstatus into our enum.
+    The server doesn't always return the exact literal 'Expired'/'Block' —
+    e.g. it can send "Your licence is expired. Please contact Admin !!!" —
+    so this matches by substring instead of an exact-string lookup that
+    silently misses real responses.
+    """
+    s = (raw_status or '').lower()
+    if s == 'approve':
+        return UserProfile.AuthStatus.APPROVED
+    if 'expired' in s:
+        return UserProfile.AuthStatus.EXPIRED
+    if 'block' in s:
+        return UserProfile.AuthStatus.BLOCKED
+    return fallback
+
+
+def _check_user_count_reduction(profile, new_total_user_count, new_parent_user_count, new_child_user_count):
+
+    user_admin = profile.user
+
+    stats = CustomUser.objects.filter(
+        user_admin=user_admin,
+        role__in=[
+            CustomUser.Role.PARENT_USER,
+            CustomUser.Role.CHILD_USER,
+        ],
+    ).aggregate(
+        total=Count("id"),
+        parent_user=Count(Case(When(role=CustomUser.Role.PARENT_USER,  then=1), output_field=IntegerField())),
+        child_user=Count(Case(When(role=CustomUser.Role.CHILD_USER,  then=1), output_field=IntegerField()))
+    )
+
+    errors = []
+    if new_total_user_count is not None and new_total_user_count < stats['total']:
+        errors.append(
+            f'Cannot reduce total_user_count to {new_total_user_count}: '
+            f'{stats["total"]} parent/child users are currently created under this user admin. '
+            'Delete or deactivate some users first.'
+        )
+
+    if new_parent_user_count is not None and new_parent_user_count < stats['parent_user']:
+        errors.append(
+            f'Cannot reduce parent_user_count to {new_parent_user_count}: '
+            f'{stats["parent_user"]} users are currently parent.'
+        )
+
+    if new_child_user_count is not None and new_child_user_count < stats["child_user"]:
+        errors.append(
+            f'Cannot reduce child_user_count to {new_child_user_count}: '
+            f'{stats["child_user"]} users are currently child.'
+        )
+
+    return len(errors) == 0, errors
