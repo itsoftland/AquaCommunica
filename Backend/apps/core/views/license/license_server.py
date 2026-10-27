@@ -6,14 +6,14 @@ from rest_framework.permissions import IsAuthenticated
 
 from django.db import transaction
 
-from ...utlis.responses import success_response, error_response
-from ...models.profiles import UserProfile, DealerProfile
-from ...services.license_server import register_with_license_server
-from ...services.get_usr_profile import get_user_profile
-from ...services.get_dlr_profile import get_dealer_profile
 from ...permissions import LicensePermission
 from ...task import poll_user_profile_license
+from ...services.get_usr_profile import get_user_profile
+from ...models.profiles import UserProfile, DealerProfile
+from ...services.get_dlr_profile import get_dealer_profile
+from ...utlis.responses import success_response, error_response
 from ...serializers.profile import UserProfileDisplaySerializer
+from ...services.license_server import register_with_license_server, fetch_user_profile_from_license_server, _build_user_profile_sync_diff
 
 
 log_license_server = logging.getLogger('aquacommunica.licenseserver')
@@ -174,3 +174,89 @@ class ValidateUserProfileLicense(APIView):
             )
 
 
+class SyncUserProfileLicense(APIView):
+
+    permission_classes = [
+        IsAuthenticated, 
+        LicensePermission
+    ]
+
+    def post(self, request, pk):
+
+        user = request.user
+
+        try:
+            profile = UserProfile.objects.get(pk=pk)
+        except UserProfile.DoesNotExist:
+
+            return error_response(
+                message="Profile not found",
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if profile.client_type == UserProfile.ClientType.DEALER:
+
+            return error_response(
+                message="License sync is not available for dealer-managed companies.",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+        # Access Control
+        if user.is_user_admin:
+
+            if not user.user_profile or user.user_profile.id != profile.id:
+                return error_response(
+                    message="You can only sync your own profile.",
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        elif user.is_executive:
+
+            if profile.created_by_id != user.id:
+                return error_response(
+                    message="You can only sync profiles you created.",
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        
+        elif user.is_dealer:
+
+            if profile.created_by_id != user.id:
+                return error_response(
+                    message="You can only sync profiles you created.",
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        elif not user.is_superadmin:
+
+            return error_response(
+                message="Not authorized.",
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not profile.profile_id:
+
+            return error_response(
+                message="Company is not registered with the license server yet.",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+        result = fetch_user_profile_from_license_server(profile.profile_id)
+
+        if not result['success']:
+
+            return error_response(
+                message="failed",
+                data=result['error'],
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+        diff = _build_user_profile_sync_diff(profile, result['data'])
+
+        return success_response(
+            message="Sync preview ready.",
+            data=diff,
+            status=status.HTTP_200_OK,
+        )
+        

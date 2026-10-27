@@ -257,3 +257,115 @@ def poll_license_authentication(customer_id, timeout_sec=120, interval_sec=20):
         'success': False,
         'error': f'Validation timeout - License not approved yet. Please try again later. ({poll_count} attempts over {int(elapsed)}s)'
     }
+
+
+def fetch_user_profile_from_license_server(customer_id):
+
+    payload = {"CustomerId": customer_id}
+
+    try:
+        response = requests.post(
+            settings.PRODUCT_AUTH_URL,
+            json=payload,
+            timeout=30
+        )
+
+        response.raise_for_status()
+        data = response.json()
+        auth_status = data.get('Authenticationstatus', '')
+
+        if not auth_status:
+
+            return {
+                "success": False,
+                "error": 'No response from license server.'
+            }
+
+        return {
+            "success": True,
+            'status': auth_status,
+            'data': data,
+        }
+
+    except requests.exceptions.Timeout:
+
+        return {
+            'success': False, 
+            'error': 'License server timed out. Try again.'
+        }
+    except requests.exceptions.ConnectionError:
+
+        return {
+            'success': False, 
+            'error': 'Cannot connect to license server.'
+        }
+    except requests.exceptions.HTTPError as e:
+
+        return {
+            'success': False, 
+            'error': f'License server error: {e.response.status_code}'
+        }
+    except Exception as e:
+       
+        return {
+            'success': False, 
+            'error': f'Unexpected error: {str(e)}'
+        }
+
+
+def _build_user_profile_sync_diff(profile, auth_data):
+
+    def _si(val):
+        try:
+            return int(val or 0)
+        except (ValueError, TypeError):
+            return 0
+
+    incoming_total_license_unit = _si(auth_data.get('NumberOfLicence'))
+    incoming_total_device_count = _si(auth_data.get('PalmtecCount'))
+    incoming_total_user_count = _si(auth_data.get('TotalUserCount'))
+    incoming_parent_user_count = _si(auth_data.get('PremiumUserCount'))
+    incoming_child_user_count = _si(auth_data.get('IntermediateUserCount'))
+
+
+    error = None
+    if incoming_total_license_unit > 0 and (incoming_total_device_count + incoming_total_user_count) > incoming_total_license_unit:
+
+        error = (
+            f"License config error: device slots ({incoming_total_device_count}) + "
+            f"user slots ({incoming_total_user_count}) = {incoming_total_device_count + incoming_total_user_count} "
+            f"exceeds total licensed units ({incoming_total_license_unit}). "
+            "Contact the license server administrator."
+        )
+
+
+    from_date_raw = auth_data.get('ProductFromDate')
+    to_date_raw = auth_data.get('ProductToDate')
+
+    incoming_date_from = _parse_license_date(from_date_raw)
+    incoming_date_to   = _parse_license_date(to_date_raw)
+
+    return {
+        'current': {
+            'total_license_unit': profile.total_licence_unit or 0,
+            'total_device_count': profile.total_device_count or 0,
+            'total_user_count': profile.total_user_count or 0,
+            'parent_user_count': profile.parent_user_count or 0,
+            'child_user_count': profile.child_user_count or 0,
+            'validity_from_date': str(profile.validity_from_date) if profile.validity_from_date else None,
+            'validity_to_date': str(profile.validity_to_date) if profile.validity_to_date else None,
+        },
+        'incoming': {
+            'total_license_unit': incoming_total_license_unit,
+            'total_device_count': incoming_total_device_count,
+            'total_user_count': incoming_total_user_count,
+            'parent_user_count': incoming_parent_user_count,
+            'child_user_count': incoming_child_user_count,
+            'validity_from_date': incoming_date_from,
+            'validity_to_date': incoming_date_to,
+            'authentication_status': auth_data.get('Authenticationstatus'),
+            'product_registration_id': _si(auth_data.get('ProductRegistrationId')),
+            'unique_identifier': auth_data.get('UniqueIDentifier', ''),
+        },
+        'error': error,
+    }
