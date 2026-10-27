@@ -1,6 +1,7 @@
 import logging
 
 from django.contrib.auth import authenticate, get_user_model
+from django.db.models import Count, When, Case, IntegerField
 
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
@@ -9,6 +10,7 @@ from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 
 from apps.core.authentication import session_error_message
+from ..models.customuser import CustomUser
 
 
 log_auth = logging.getLogger('aquacommunica.authlog')
@@ -203,16 +205,64 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
         created_by = request.user if request else None
 
+        dealer = None
+        user_admin = None
+
         if created_by.role == "dealer":
             dealer = request.user
-        else:
-            dealer = None
+
+        if created_by.role == "user_admin":
+            user = request.user
+            user_admin = user
+
+            profile = user.user_profile
+
+            stats = CustomUser.objects.filter(
+                    user_admin=user_admin,
+                    role__in=[
+                        CustomUser.Role.PARENT_USER,
+                        CustomUser.Role.CHILD_USER,
+                    ],
+                ).aggregate(
+                    total=Count("id"),
+                    parent_user=Count(Case(When(role=CustomUser.Role.PARENT_USER,  then=1), output_field=IntegerField())),
+                    child_user=Count(Case(When(role=CustomUser.Role.CHILD_USER,  then=1), output_field=IntegerField()))
+                )
+
+            available_parent_user = (
+                profile.parent_user_count - stats["parent_user"]
+            )
+
+            available_child_user = (
+                profile.child_user_count - stats["child_user"]
+            )
+
+            role = validated_data.get("role")
+
+            if role == "parent_user":
+                if available_parent_user < 1:
+                    raise serializers.ValidationError({
+                        "role": (
+                            f"No parent user slots available. "
+                            f"Available count: {available_parent_user}."
+                        )
+                    })
+
+            if role == "child_user":
+                if available_child_user < 1:
+                    raise serializers.ValidationError({
+                        "role": (
+                            f"No child user slots available. "
+                            f"Available count: {available_child_user}."
+                        )
+                    })
 
         # Use CustomUserManager.create_user()
         user = User.objects.create_user(
             password=password,
             created_by=created_by,
             dealer=dealer,
+            user_admin=user_admin,
             **validated_data
         )
 
