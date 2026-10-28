@@ -20,6 +20,7 @@ urlpatterns = [
     #user profile urls
     path('userprofile/<int:pk>/update/', profile.UpdateUserProfile.as_view(), name="update_user_profile"),
     path('get-user-profile-list/', profile.ListUserProfiles.as_view(), name="get_user_profile_list"),
+    path('user-profile-detailes/<int:pk>/', profile.UserProfileDetailes.as_view(), name="user_profile_details"),
 
     # audit logs (superadmin only)
     path('audit-logs/', audit.AuditLogListView.as_view(), name="audit_logs"),

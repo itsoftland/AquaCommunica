@@ -184,3 +184,47 @@ class ListUserProfiles(APIView):
             status=status.HTTP_200_OK,
         )
 
+
+class UserProfileDetailes(APIView):
+
+    permission_classes = [IsAuthenticated,]
+
+    def get(self, request, pk):
+
+        try:
+            profile = get_user_profile(pk)
+        except UserProfile.DoesNotExist:
+
+            action_log.warning(
+                f"User profile fetch failed, profile not found: id={pk}, "
+                f"requested_by={request.user.id}"
+            )
+
+            return error_response(
+                f"User Profile with ID = {pk} not found",
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if profile.created_by != request.user:
+
+            action_log.warning(
+                f"User profile fetch denied: id={pk}, "
+                f"requested_by={request.user.id}"
+            )
+
+            return error_response(
+                message="you dont have permission to access this profile",
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = UserProfileDisplaySerializer(profile)
+
+        action_log.info(
+            f"User profile fetched: id={pk}, requested_by={request.user.id}"
+        )
+
+        return success_response(
+            message="User profile fetched successfully.",
+            data=serializer.data,
+            status=status.HTTP_200_OK,
+        )
