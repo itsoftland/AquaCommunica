@@ -5,6 +5,8 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from ...utlis.responses import success_response
+from ...utlis.audit import record_audit
+from apps.core.models.audit import AuditLog
 from apps.core.serializers.auth import LoginSerializer, UserRegisterSerializer, LogoutSerializer
 
 
@@ -46,6 +48,14 @@ class LoginView(APIView):
             user.id,
             user.email,
             user.role,
+        )
+
+        record_audit(
+            request,
+            AuditLog.Action.LOGIN,
+            user=user,
+            instance=user,
+            description=f"User {user.email} logged in",
         )
 
         return success_response(
@@ -114,6 +124,15 @@ class UserRegisterView(APIView):
             user.role,
         )
 
+        record_audit(
+            request,
+            AuditLog.Action.CREATE,
+            user=request.user,
+            instance=user,
+            description=f"User {user.email} created",
+            new_values={"email": user.email, "role": user.role},
+        )
+
         return success_response(
             "User created successfully.",
             {
@@ -142,5 +161,13 @@ class LogoutView(APIView):
 
         log_auth.info(
             "Logout successful."
+        )
+
+        record_audit(
+            request,
+            AuditLog.Action.LOGOUT,
+            user=request.user,
+            instance=request.user,
+            description=f"User {request.user.email} logged out",
         )
         return success_response("Logout successful.")

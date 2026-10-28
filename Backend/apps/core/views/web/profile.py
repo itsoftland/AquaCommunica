@@ -8,6 +8,8 @@ from ...services.get_usr_profile import get_user_profile
 from ...services.get_dlr_profile import get_dealer_profile
 from ...models.profiles import UserProfile, DealerProfile
 from ...utlis.responses import error_response, success_response
+from ...utlis.audit import record_audit
+from ...models.audit import AuditLog
 from ...permissions import CanManageUserProfiles, IsSuperAdmin
 from ...serializers.profile import UserProfileUpdateSerializer, DealerProfileUpdateSerializer
 
@@ -43,7 +45,24 @@ class UpdateUserProfile(APIView):
         )
 
         if serializer.is_valid():
+            old_values = {
+                field: str(getattr(user_profile, field, None))
+                for field in serializer.validated_data
+            }
             serializer.save()
+
+            record_audit(
+                request,
+                AuditLog.Action.UPDATE,
+                user=request.user,
+                instance=user_profile,
+                description=f"User profile {pk} updated",
+                old_values=old_values,
+                new_values={
+                    field: str(value)
+                    for field, value in serializer.validated_data.items()
+                },
+            )
 
             action_log.info(
                 f"User profile updated: id={pk}, "
@@ -95,7 +114,24 @@ class UpdateDealerProfile(APIView):
         )
 
         if serializer.is_valid():
+            old_values = {
+                field: str(getattr(dealer_profile, field, None))
+                for field in serializer.validated_data
+            }
             serializer.save()
+
+            record_audit(
+                request,
+                AuditLog.Action.UPDATE,
+                user=request.user,
+                instance=dealer_profile,
+                description=f"Dealer profile {pk} updated",
+                old_values=old_values,
+                new_values={
+                    field: str(value)
+                    for field, value in serializer.validated_data.items()
+                },
+            )
 
             action_log.info(
                 f"Dealer profile updated: id={pk}, "
