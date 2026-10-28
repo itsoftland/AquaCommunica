@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+{% block title %}Customer | AquaCommunica{% endblock %}
+
+{% block content %}
+<style id="auth-guard-style">body { visibility: hidden; }</style>
+<script>
+(async () => {
+    const toLogin = () => {
+        ["access_token", "refresh_token", "user"].forEach(k => localStorage.removeItem(k));
+        window.location.replace("{% url 'login_page' %}");
+    };
+    const profile = (token) => fetch("{% url 'user_profile' %}", {
+        headers: { "Authorization": "Bearer " + token },
+    });
+
+    const access  = localStorage.getItem("access_token");
+    const refresh = localStorage.getItem("refresh_token");
+    if (!access || !refresh) return toLogin();
+
+    try {
+        let res = await profile(access);
+        if (res.status === 401) {
+            const r = await fetch("{% url 'token_refresh' %}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh }),
+            });
+            const body = await r.json().catch(() => ({}));
+            const newAccess = body.access || (body.data && body.data.access);
+            if (!r.ok || !newAccess) return toLogin();
+            localStorage.setItem("access_token", newAccess);
+            res = await profile(newAccess);
+        }
+        if (!res.ok) return toLogin();
+        const body = await res.json();
+        // only super admins and dealers may view this page
+        if (!["superadmin", "dealer"].includes(body.data.user.role)) {
+            return window.location.replace("{% url 'dashboard' %}");
+        }
+    } catch (_) {
+        return toLogin();
+    }
+    document.getElementById("auth-guard-style").remove();
+    loadCustomers();
+})();
+
+const REGISTER_URL = "{% url 'reg_user_profile_with_ls' 0 %}";
+const VALIDATE_URL = "{% url 'validate_user_profile_license' 0 %}";
+const SYNC_URL = "{% url 'sync_user_profile_license' 0 %}";
+const SYNC_CONFIRM_URL = "{% url 'sync_user_profile_license_confirm' 0 %}";
+
+async function licenseAction(urlTemplate, id, btn) {
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Please wait...";
+    try {
+        const res = await fetch(urlTemplate.replace(/0\/$/, id + "/"), {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + localStorage.getItem("access_token") },
+        });
+        const json = await res.json().catch(() => ({}));
+        const detail = json.data && json.data.error ? ". " + json.data.error : "";
+        alert((json.message || (res.ok ? "Done." : "Request failed.")) + detail);
+    } catch (_) {
+        alert("Network error. Please try again.");
+    }
+    btn.disabled = false;
+    btn.textContent = label;
+    loadCustomers();
+}
+
+const CREATE_USER_URL = "{% url 'user_registration' %}";
+
+function openAddModal() {
+    document.getElementById("add-form").reset();
+    document.getElementById("add-error").hidden = true;
+    document.getElementById("add-modal").hidden = false;
+}
+
+function closeAddModal() {
+    document.getElementById("add-modal").hidden = true;
+}
+
+function flattenErrors(v) {
+    if (v === null || v === undefined) return "";
+    if (typeof v === "string") return v;
+    if (Array.isArray(v)) return v.map(flattenErrors).join(" ");
+    if (typeof v === "object") {
+        return Object.entries(v).map(([k, x]) => k + ": " + flattenErrors(x)).join("; ");
+    }
+    return String(v);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("add-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const f = e.target;
+        const err = document.getElementById("add-error");
+        const submit = document.getElementById("add-submit");
+        err.hidden = true;
+        if (!f.reportValidity()) return;
+        submit.disabled = true;
+        submit.textContent = "Creating...";
+        try {
+            const res = await fetch(CREATE_USER_URL, {
+                method: "POST",
+                headers: {
+                    "Authorization": "Bearer " + localStorage.getItem("access_token"),
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    email: f.email.value.trim(),
+                    password: f.password.value,
+                    password_confirm: f.password_confirm.value,
+                    role: "user_admin",
+                }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                err.textContent = flattenErrors(json.data || json.message || json) || "Unable to create customer.";
+                err.hidden = false;
+            } else {
+                closeAddModal();
+                loadCustomers();
+            }
+        } catch (_) {
+            err.textContent = "Network error. Please try again.";
+            err.hidden = false;
+        }
+        submit.disabled = false;
+        submit.textContent = "Create";
+    });
+});
+
+const SYNC_FIELDS = [
+    ["total_license_unit", "Total License Units"],
+    ["total_device_count", "Devices"],
+    ["total_user_count", "Total Users"],
+    ["parent_user_count", "Parent Users"],
+    ["child_user_count", "Child Users"],
+    ["validity_from_date", "Valid From"],
+    ["validity_to_date", "Valid To"],
+];
+
+function apiUrl(template, id) {
+    return template.replace(/0\/$/, id + "/");
+}
+
+function closeSyncModal() {
+    document.getElementById("sync-modal").hidden = true;
+}
+
+async function openSyncModal(id, btn) {
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Please wait...";
+    let res, json;
+    try {
+        res = await fetch(apiUrl(SYNC_URL, id), {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + localStorage.getItem("access_token") },
+        });
+        json = await res.json().catch(() => ({}));
+    } catch (_) {
+        btn.disabled = false;
+        btn.textContent = label;
+        return alert("Network error. Please try again.");
+    }
+    btn.disabled = false;
+    btn.textContent = label;
+    if (!res.ok) {
+        const d = json.data;
+        return alert((json.message || "Request failed.") + (typeof d === "string" ? " (" + d + ")" : ""));
+    }
+
+    const { current, incoming, error } = json.data;
+    const body = document.getElementById("sync-body");
+    body.innerHTML = "";
+    const show = (v) => (v === null || v === undefined || v === "") ? "-" : v;
+    for (const [key, name] of SYNC_FIELDS) {
+        const tr = document.createElement("tr");
+        const changed = String(show(current[key])) !== String(show(incoming[key]));
+        if (changed) tr.className = "changed";
+        [name, show(current[key]), show(incoming[key])].forEach(v => {
+            const td = document.createElement("td");
+            td.textContent = v;
+            tr.appendChild(td);
+        });
+        body.appendChild(tr);
+    }
+    const extra = document.createElement("tr");
+    [ "Authentication Status", "-", show(incoming.authentication_status) ].forEach(v => {
+        const td = document.createElement("td");
+        td.textContent = v;
+        extra.appendChild(td);
+    });
+    body.appendChild(extra);
+
+    const err = document.getElementById("sync-error");
+    err.hidden = !error;
+    err.textContent = error || "";
+
+    const confirmBtn = document.getElementById("sync-confirm-btn");
+    confirmBtn.disabled = !!error;
+    confirmBtn.textContent = "Confirm Sync";
+    confirmBtn.onclick = () => confirmSync(id, confirmBtn);
+    document.getElementById("sync-modal").hidden = false;
+}
+
+async function confirmSync(id, btn) {
+    btn.disabled = true;
+    btn.textContent = "Syncing...";
+    try {
+        const res = await fetch(apiUrl(SYNC_CONFIRM_URL, id), {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + localStorage.getItem("access_token") },
+        });
+        const json = await res.json().catch(() => ({}));
+        const d = json.data;
+        const detail = !res.ok && typeof d === "string" ? " (" + d + ")" : "";
+        alert((json.message || (res.ok ? "Synced." : "Sync failed.")) + detail);
+        if (res.ok) closeSyncModal();
+    } catch (_) {
+        alert("Network error. Please try again.");
+    }
+    btn.disabled = false;
+    btn.textContent = "Confirm Sync";
+    loadCustomers();
+}
+
+async function validateThenSync(id, btn) {
+    const label = btn.textContent;
+    const post = async (template) => {
+        const res = await fetch(apiUrl(template, id), {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + localStorage.getItem("access_token") },
+        });
+        return { res, json: await res.json().catch(() => ({})) };
+    };
+    const fail = (title, r) => {
+        const d = r.json.data;
+        const detail = typeof d === "string" ? " (" + d + ")" : (d && d.error ? " (" + d.error + ")" : "");
+        alert(title + ": " + (r.json.message || "Request failed.") + detail);
+    };
+
+    btn.disabled = true;
+    try {
+        btn.textContent = "Validating...";
+        const v = await post(VALIDATE_URL);
+        if (!v.res.ok) return fail("Validation failed", v);
+
+        for (let s = 10; s > 0; s--) {
+            btn.textContent = "Syncing in " + s + "s...";
+            await new Promise(r => setTimeout(r, 1000));
+        }
+
+        btn.textContent = "Syncing...";
+        const c = await post(SYNC_CONFIRM_URL);
+        if (!c.res.ok) return fail("Sync failed", c);
+        alert(c.json.message || "License data synced successfully.");
+    } catch (_) {
+        alert("Network error. Please try again.");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+        loadCustomers();
+    }
+}
+
+async function loadCustomers() {
+    const body = document.getElementById("customer-body");
+    const cols = 9;
+    const message = (text) => {
+        body.innerHTML = "";
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = cols;
+        td.textContent = text;
+        tr.appendChild(td);
+        body.appendChild(tr);
+    };
+
+    const res = await fetch("{% url 'get_user_profile_list' %}", {
+        headers: { "Authorization": "Bearer " + localStorage.getItem("access_token") },
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return message(json.message || "Unable to load customers.");
+
+    const rows = json.data || [];
+    if (!rows.length) return message("No customers yet.");
+
+    body.innerHTML = "";
+    for (const p of rows) {
+        const tr = document.createElement("tr");
+        [
+            p.profile_id,
+            [p.first_name, p.last_name].filter(Boolean).join(" "),
+            p.user_email,
+            p.city,
+            p.total_device_count,
+            p.validity_to_date,
+            p.authentication_status,
+            p.is_profile_active ? "Active" : "Inactive",
+        ].forEach(v => {
+            const td = document.createElement("td");
+            td.textContent = (v === null || v === undefined || v === "") ? "-" : v;
+            tr.appendChild(td);
+        });
+        const statusCell = tr.lastElementChild;
+        const badge = document.createElement("span");
+        badge.className = "badge " + (p.is_profile_active ? "badge-green" : "badge-red");
+        badge.textContent = statusCell.textContent;
+        statusCell.textContent = "";
+        statusCell.appendChild(badge);
+        const actionTd = document.createElement("td");
+        const btn = document.createElement("button");
+        btn.className = "action-btn";
+        if (p.authentication_status === "Approved") {
+            btn.textContent = "Sync License";
+            btn.onclick = () => openSyncModal(p.id, btn);
+        } else if (p.profile_id) {
+            btn.textContent = "Validate License";
+            btn.onclick = () => validateThenSync(p.id, btn);
+        } else {
+            btn.textContent = "Register License";
+            btn.onclick = () => licenseAction(REGISTER_URL, p.id, btn);
+        }
+        actionTd.appendChild(btn);
+        tr.appendChild(actionTd);
+        body.appendChild(tr);
+    }
+}
+</script>
+
+{% include "nav/nav.html" %}
+<div class="customer-page">
+    <div class="page-head">
+        <h1>Customers</h1>
+        <button class="action-btn primary add-btn" onclick="openAddModal()">+ Add Customer</button>
+    </div>
+    <div class="customer-table-wrap">
+        <table class="customer-table">
+            <thead>
+                <tr>
+                    <th>Profile ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>City</th>
+                    <th>Devices</th>
+                    <th>Valid Till</th>
+                    <th>Authentication</th>
+                    <th>Status</th>
+                    <th>License Action</th>
+                </tr>
+            </thead>
+            <tbody id="customer-body"><tr><td colspan="9">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+<div id="add-modal" class="modal-overlay" hidden>
+    <div class="modal">
+        <h2>Add Customer</h2>
+        <form id="add-form" novalidate>
+            <label>Email<input type="email" name="email" required autocomplete="off"></label>
+            <label>Password<input type="password" name="password" minlength="6" required autocomplete="new-password"></label>
+            <label>Confirm Password<input type="password" name="password_confirm" required autocomplete="new-password"></label>
+            <div id="add-error" class="sync-error" hidden></div>
+            <div class="modal-actions">
+                <button type="button" class="action-btn" onclick="closeAddModal()">Cancel</button>
+                <button type="submit" class="action-btn primary" id="add-submit">Create</button>
+            </div>
+        </form>
+    </div>
+</div>
+<div id="sync-modal" class="modal-overlay" hidden>
+    <div class="modal">
+        <h2>Sync License</h2>
+        <p class="modal-note">Review the changes from the license server before confirming.</p>
+        <div id="sync-error" class="sync-error" hidden></div>
+        <table class="customer-table">
+            <thead>
+                <tr><th>Field</th><th>Current</th><th>Incoming</th></tr>
+            </thead>
+            <tbody id="sync-body"></tbody>
+        </table>
+        <div class="modal-actions">
+            <button class="action-btn" onclick="closeSyncModal()">Cancel</button>
+            <button class="action-btn primary" id="sync-confirm-btn">Confirm Sync</button>
+        </div>
+    </div>
+</div>
+<style>
+.customer-page { max-width: 100%; }
+.customer-page h1 { margin: 0; font-size: 1.6rem; color: #1f2933; }
+.page-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.add-btn { padding: 8px 16px; font-weight: 600; }
+#add-form label { display: block; margin-bottom: 12px; color: #52606d; font-size: .9rem; }
+#add-form input { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px 10px; border: 1px solid #d0d6dd; border-radius: 6px; font-size: 1rem; }
+.customer-table-wrap { width: 100%; overflow-x: auto; background: #fff; border: 1px solid #e3e8ef; border-radius: 8px; }
+.customer-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+.customer-table th { text-align: left; background: #087f8c; color: #fff; padding: 10px 12px; white-space: nowrap; font-weight: 600; }
+.customer-table td { padding: 10px 12px; border-bottom: 1px solid #eef1f5; vertical-align: top; overflow-wrap: anywhere; color: #1f2933; }
+.customer-table tbody tr:hover { background: #f6f9fb; }
+.action-btn { border: 1px solid #087f8c; background: #fff; color: #087f8c; padding: 4px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.action-btn + .action-btn { margin-left: 6px; }
+.action-btn:hover:not(:disabled) { background: #087f8c; color: #fff; }
+.action-btn:disabled { border-color: #d0d6dd; color: #a0a8b1; cursor: not-allowed; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+.modal-overlay[hidden] { display: none; }
+.modal { background: #fff; border-radius: 8px; padding: 20px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; }
+.modal h2 { margin: 0 0 4px; font-size: 1.2rem; color: #1f2933; }
+.modal-note { margin: 0 0 12px; color: #52606d; font-size: .9rem; }
+.modal tr.changed td { background: #fff8e1; font-weight: 600; }
+.sync-error { background: #fdecec; color: #b42318; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; }
+.modal-actions { margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px; }
+.action-btn.primary { background: #087f8c; color: #fff; }
+.action-btn.primary:disabled { background: #d0d6dd; color: #fff; border-color: #d0d6dd; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: .75rem; font-weight: 600; text-transform: uppercase; background: #eef1f5; color: #52606d; }
+.badge-green { background: #e6f6ec; color: #1a7f45; }
+.badge-red { background: #fdecec; color: #b42318; }
+@media (max-width: 768px) {
+    body { padding-left: 0; }
+    .sidebar { position: static; width: auto; }
+}
+</style>
+{% endblock %}

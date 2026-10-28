@@ -9,3 +9,7 @@ def dashboard(request):
 
 def audit_log_page(request):
     return render(request, "AuditLog/audit_log.html")
+
+
+def customer_page(request):
+    return render(request, "Customer/customer.html")
