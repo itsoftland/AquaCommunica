@@ -186,10 +186,17 @@ def poll_license_authentication(customer_id, timeout_sec=120, interval_sec=20):
     start_time = time.time()
     poll_count = 0
 
+    log_license_server.info(
+        f"Polling license authentication started: customer_id={customer_id}, "
+        f"timeout={timeout_sec}s, interval={interval_sec}s"
+    )
 
     while time.time() - start_time < timeout_sec:
 
         poll_count += 1
+        log_license_server.info(
+            f"Poll attempt {poll_count} for customer_id={customer_id}"
+        )
 
         try: 
             response = requests.post(
@@ -202,10 +209,16 @@ def poll_license_authentication(customer_id, timeout_sec=120, interval_sec=20):
                 
             data = response.json()
             auth_status = data.get('Authenticationstatus', '')
+            log_license_server.info(
+                f"Poll attempt {poll_count} response: customer_id={customer_id}, "
+                f"status={auth_status!r}, data={data}"
+            )
 
             # Success case
             if auth_status == 'Approve':
-                
+                log_license_server.info(
+                    f"License approved: customer_id={customer_id} after {poll_count} attempt(s)"
+                )
                 return {
                     'success': True,
                     'status': 'Approve',
@@ -214,7 +227,9 @@ def poll_license_authentication(customer_id, timeout_sec=120, interval_sec=20):
 
             # Expired license
             if 'expired' in auth_status.lower():
-
+                log_license_server.warning(
+                    f"License expired: customer_id={customer_id}, status={auth_status!r}"
+                )
                 return {
                     'success': True,
                     'status': 'Expired',
@@ -224,10 +239,17 @@ def poll_license_authentication(customer_id, timeout_sec=120, interval_sec=20):
             # Still waiting - continue polling
             if 'waiting' in auth_status.lower() or auth_status == 'Pending':
                 
+                log_license_server.info(
+                    f"License still pending for customer_id={customer_id}, "
+                    f"retrying in {interval_sec}s"
+                )
                 time.sleep(interval_sec)
                 continue
 
              # Unknown status - treat as error
+            log_license_server.error(
+                f"Unexpected authentication status for customer_id={customer_id}: {auth_status!r}"
+            )
             return {
                 'success': False,
                 'error': f'Unexpected authentication status: {auth_status}'
@@ -235,21 +257,30 @@ def poll_license_authentication(customer_id, timeout_sec=120, interval_sec=20):
 
         
         except requests.exceptions.Timeout as e:
+            log_license_server.error(f"License server timeout: customer_id={customer_id}, error={e}")
             return {
                 'success': False,
                 'error': 'License server not responding. Please try again later.'
             }
         except requests.exceptions.ConnectionError as e:
+            log_license_server.error(f"License server connection error: customer_id={customer_id}, error={e}")
             return {
                 'success': False,
                 'error': 'Cannot connect to license server. Check your network connection.'
             }
         except requests.exceptions.HTTPError as e:
+            log_license_server.error(
+                f"License server HTTP error: customer_id={customer_id}, "
+                f"status_code={e.response.status_code}, error={e}"
+            )
             return {
                 'success': False,
                 'error': f'License server error: {e.response.status_code}. Try again later.'
             }
         except Exception as e:
+            log_license_server.exception(
+                f"Unexpected error polling license: customer_id={customer_id}, error={e}"
+            )
             return {
                 'success': False,
                 'error': 'Unexpected error during validation. Please try again.'
@@ -257,6 +288,10 @@ def poll_license_authentication(customer_id, timeout_sec=120, interval_sec=20):
 
     # Timeout
     elapsed = time.time() - start_time
+    log_license_server.warning(
+        f"License polling timed out: customer_id={customer_id}, "
+        f"{poll_count} attempts over {int(elapsed)}s"
+    )
     return {
         'success': False,
         'error': f'Validation timeout - License not approved yet. Please try again later. ({poll_count} attempts over {int(elapsed)}s)'
@@ -266,6 +301,7 @@ def poll_license_authentication(customer_id, timeout_sec=120, interval_sec=20):
 def fetch_user_profile_from_license_server(customer_id):
 
     payload = {"CustomerId": customer_id}
+    log_license_server.info(f"Fetching user profile for CustomerId={customer_id}")
 
     try:
         response = requests.post(
@@ -274,11 +310,17 @@ def fetch_user_profile_from_license_server(customer_id):
             timeout=30
         )
 
+        log_license_server.info(
+            f"Profile fetch response: status={response.status_code}, body={response.text}"
+        )
         response.raise_for_status()
         data = response.json()
         auth_status = data.get('Authenticationstatus', '')
 
         if not auth_status:
+            log_license_server.warning(
+                f"No Authenticationstatus for CustomerId={customer_id}"
+            )
 
             return {
                 "success": False,
@@ -292,24 +334,32 @@ def fetch_user_profile_from_license_server(customer_id):
         }
 
     except requests.exceptions.Timeout:
+        log_license_server.error(f"Profile fetch timed out for CustomerId={customer_id}")
 
         return {
             'success': False, 
             'error': 'License server timed out. Try again.'
         }
     except requests.exceptions.ConnectionError:
+        log_license_server.error(f"Profile fetch connection error for CustomerId={customer_id}")
 
         return {
             'success': False, 
             'error': 'Cannot connect to license server.'
         }
     except requests.exceptions.HTTPError as e:
+        log_license_server.error(
+            f"Profile fetch HTTP error for CustomerId={customer_id}: {e.response.status_code}"
+        )
 
         return {
             'success': False, 
             'error': f'License server error: {e.response.status_code}'
         }
     except Exception as e:
+        log_license_server.exception(
+            f"Profile fetch unexpected error for CustomerId={customer_id}: {e}"
+        )
        
         return {
             'success': False, 
@@ -341,13 +391,22 @@ def _build_user_profile_sync_diff(profile, auth_data):
             f"exceeds total licensed units ({incoming_total_license_unit}). "
             "Contact the license server administrator."
         )
-
+        log_license_server.warning(
+            "[SYNC DIFF] profile=%s %s", getattr(profile, 'pk', None), error
+        )
 
     from_date_raw = auth_data.get('ProductFromDate')
     to_date_raw = auth_data.get('ProductToDate')
 
     incoming_date_from = _parse_license_date(from_date_raw)
     incoming_date_to   = _parse_license_date(to_date_raw)
+
+    log_license_server.info(
+        "[SYNC DIFF] profile=%s incoming: units=%s devices=%s users=%s parent=%s child=%s from=%s to=%s",
+        getattr(profile, 'pk', None), incoming_total_license_unit, incoming_total_device_count,
+        incoming_total_user_count, incoming_parent_user_count, incoming_child_user_count,
+        incoming_date_from, incoming_date_to,
+    )
 
     return {
         'current': {
@@ -397,6 +456,12 @@ def _check_user_count_reduction(profile, new_total_user_count, new_parent_user_c
 
     user_admin = profile.user
 
+    log_license_server.info(
+        f"Checking user count reduction for user_admin={user_admin.pk}: "
+        f"new_total={new_total_user_count}, new_parent={new_parent_user_count}, "
+        f"new_child={new_child_user_count}"
+    )
+
     stats = CustomUser.objects.filter(
         user_admin=user_admin,
         role__in=[
@@ -407,6 +472,10 @@ def _check_user_count_reduction(profile, new_total_user_count, new_parent_user_c
         total=Count("id"),
         parent_user=Count(Case(When(role=CustomUser.Role.PARENT_USER,  then=1), output_field=IntegerField())),
         child_user=Count(Case(When(role=CustomUser.Role.CHILD_USER,  then=1), output_field=IntegerField()))
+    )
+
+    log_license_server.info(
+        f"Current user stats for user_admin={user_admin.pk}: {stats}"
     )
 
     errors = []
@@ -427,6 +496,11 @@ def _check_user_count_reduction(profile, new_total_user_count, new_parent_user_c
         errors.append(
             f'Cannot reduce child_user_count to {new_child_user_count}: '
             f'{stats["child_user"]} users are currently child.'
+        )
+
+    if errors:
+        log_license_server.warning(
+            f"User count reduction rejected for user_admin={user_admin.pk}: {errors}"
         )
 
     return len(errors) == 0, errors

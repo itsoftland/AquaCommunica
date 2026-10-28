@@ -184,11 +184,13 @@ class SyncUserProfileLicense(APIView):
 
     def post(self, request, pk):
 
+        log_license_server.info(f"User Profile license sync preview started for id: {pk}")
         user = request.user
 
         try:
             profile = UserProfile.objects.get(pk=pk)
         except UserProfile.DoesNotExist:
+            log_license_server.warning(f"License sync preview: profile not found for id: {pk}")
 
             return error_response(
                 message="Profile not found",
@@ -196,6 +198,7 @@ class SyncUserProfileLicense(APIView):
             )
 
         if profile.client_type == UserProfile.ClientType.DEALER:
+            log_license_server.warning(f"License sync preview rejected: profile {pk} is dealer-managed")
 
             return error_response(
                 message="License sync is not available for dealer-managed companies.",
@@ -207,6 +210,7 @@ class SyncUserProfileLicense(APIView):
         if user.is_user_admin:
 
             if not user.user_profile or user.user_profile.id != profile.id:
+                log_license_server.warning(f"License sync preview forbidden: user {user.id} (admin) tried to sync profile {pk}")
                 return error_response(
                     message="You can only sync your own profile.",
                     status=status.HTTP_403_FORBIDDEN,
@@ -215,6 +219,7 @@ class SyncUserProfileLicense(APIView):
         elif user.is_executive:
 
             if profile.created_by_id != user.id:
+                log_license_server.warning(f"License sync preview forbidden: user {user.id} (executive) tried to sync profile {pk}")
                 return error_response(
                     message="You can only sync profiles you created.",
                     status=status.HTTP_403_FORBIDDEN,
@@ -223,12 +228,14 @@ class SyncUserProfileLicense(APIView):
         elif user.is_dealer:
 
             if profile.created_by_id != user.id:
+                log_license_server.warning(f"License sync preview forbidden: user {user.id} (dealer) tried to sync profile {pk}")
                 return error_response(
                     message="You can only sync profiles you created.",
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
         elif not user.is_superadmin:
+            log_license_server.warning(f"License sync preview forbidden: user {user.id} not authorized for profile {pk}")
 
             return error_response(
                 message="Not authorized.",
@@ -236,6 +243,7 @@ class SyncUserProfileLicense(APIView):
             )
 
         if not profile.profile_id:
+            log_license_server.warning(f"License sync preview rejected: profile {pk} not registered with license server")
 
             return error_response(
                 message="Company is not registered with the license server yet.",
@@ -243,9 +251,11 @@ class SyncUserProfileLicense(APIView):
             )
 
 
+        log_license_server.info(f"Fetching license server data for profile {pk} (license profile_id: {profile.profile_id})")
         result = fetch_user_profile_from_license_server(profile.profile_id)
 
         if not result['success']:
+            log_license_server.error(f"License server fetch failed for profile {pk}: {result['error']}")
 
             return error_response(
                 message="failed",
@@ -254,6 +264,7 @@ class SyncUserProfileLicense(APIView):
             )
 
         diff = _build_user_profile_sync_diff(profile, result['data'])
+        log_license_server.info(f"License sync preview ready for profile {pk}")
 
         return success_response(
             message="Sync preview ready.",
@@ -273,10 +284,13 @@ class SyncUserProfileLicenseConfirm(APIView):
 
         user = request.user
 
+        log_license_server.info(f"User Profile license sync confirm started for id: {pk} by user: {user.id}")
+
         try:
             profile = UserProfile.objects.get(pk=pk)
         except UserProfile.DoesNotExist:
 
+            log_license_server.warning(f"License sync confirm: profile not found for id: {pk}")
             return error_response(
                 message="user profile not found",
                 status=status.HTTP_404_NOT_FOUND,
@@ -284,6 +298,7 @@ class SyncUserProfileLicenseConfirm(APIView):
 
         if profile.client_type == UserProfile.ClientType.DEALER:
 
+            log_license_server.warning(f"License sync confirm blocked: dealer-managed profile id: {pk}")
             return error_response(
                 message="License sync is not available for dealer-managed profiles.",
                 status=status.HTTP_400_BAD_REQUEST,
@@ -293,6 +308,7 @@ class SyncUserProfileLicenseConfirm(APIView):
         if user.is_user_admin:
         
             if not user.user_profile or user.user_profile.id != profile.id:
+                log_license_server.warning(f"License sync confirm forbidden: user {user.id} tried to sync profile id: {pk} (not own profile)")
                 return error_response(
                     message="You can only sync your own profile.",
                     status=status.HTTP_403_FORBIDDEN,
@@ -301,6 +317,7 @@ class SyncUserProfileLicenseConfirm(APIView):
         elif user.is_executive:
 
             if profile.created_by_id != user.id:
+                log_license_server.warning(f"License sync confirm forbidden: user {user.id} did not create profile id: {pk}")
                 return error_response(
                     message="You can only sync profiles you created.",
                     status=status.HTTP_403_FORBIDDEN,
@@ -309,6 +326,7 @@ class SyncUserProfileLicenseConfirm(APIView):
         elif user.is_dealer:
 
             if profile.created_by_id != user.id:
+                log_license_server.warning(f"License sync confirm forbidden: user {user.id} did not create profile id: {pk}")
                 return error_response(
                     message="You can only sync profiles you created.",
                     status=status.HTTP_403_FORBIDDEN,
@@ -316,6 +334,7 @@ class SyncUserProfileLicenseConfirm(APIView):
 
         elif not user.is_superadmin:
 
+            log_license_server.warning(f"License sync confirm forbidden: user {user.id} not authorized for profile id: {pk}")
             return error_response(
                 message="Not authorized.",
                 status=status.HTTP_403_FORBIDDEN,
@@ -324,6 +343,7 @@ class SyncUserProfileLicenseConfirm(APIView):
 
         result = fetch_user_profile_from_license_server(profile.profile_id)
         if not result['success']:
+            log_license_server.error(f"License sync confirm: license server request failed for profile_id: {profile.profile_id}: {result['error']}")
             return error_response(
                 message="Failed to communicate with the external server.",
                 data=result['error'],
@@ -339,6 +359,7 @@ class SyncUserProfileLicenseConfirm(APIView):
 
             if diff['error']:
 
+                log_license_server.warning(f"License sync confirm: consistency check failed for profile id: {pk}: {diff['error']}")
                 profile.authentication_status = UserProfile.AuthStatus.PENDING
                 profile.error_message = diff["error"]
                 profile.save(update_fields=['authentication_status', 'error_message'])
@@ -373,6 +394,7 @@ class SyncUserProfileLicenseConfirm(APIView):
 
             if not ok:
 
+                log_license_server.warning(f"License sync confirm: user count reduction rejected for profile id: {pk}: {errs}")
                 return error_response(
                     message="Cannot apply sync: would reduce user counts below current assignments.",
                     data=errs,
@@ -397,6 +419,8 @@ class SyncUserProfileLicenseConfirm(APIView):
         profile.error_message = None
 
         profile.save()
+
+        log_license_server.info(f"License sync confirm applied for profile id: {pk}, auth status: {profile.authentication_status}")
 
         serializer = UserProfileDisplaySerializer(profile)
 
