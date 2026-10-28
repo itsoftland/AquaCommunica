@@ -1,0 +1,51 @@
+<style>
+    body {
+        padding-left: 220px;
+    }
+
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 220px;
+        box-sizing: border-box;
+        background: #087f8c;
+        color: white;
+        padding: 20px;
+        overflow-y: auto;
+    }
+
+    .sidebar .brand {
+        margin: 0 0 25px;
+        font-size: 1.4rem;
+    }
+
+    .sidebar ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .sidebar a {
+        display: block;
+        color: white;
+        text-decoration: none;
+        padding: 10px 12px;
+        border-radius: 6px;
+    }
+
+    .sidebar a:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
+</style>
+
+<nav class="sidebar">
+    <h2 class="brand">AquaCommunica</h2>
+    <ul>
+        <li><a href="/">Home</a></li>
+    </ul>
+</nav>

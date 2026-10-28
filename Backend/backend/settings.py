@@ -55,6 +55,7 @@ INSTALLED_APPS = [
 
     # Custom apps
     'apps.core.apps.CoreConfig',
+    'apps.frontend.apps.FrontendConfig',
 ]
 
 # custom user model
@@ -101,7 +102,7 @@ ROOT_URLCONF = 'backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / "templates"],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
