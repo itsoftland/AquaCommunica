@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Audit Log | AquaCommunica{% endblock %}
+
+{% block content %}
+<style id="auth-guard-style">body { visibility: hidden; }</style>
+<script>
+(async () => {
+    const toLogin = () => {
+        ["access_token", "refresh_token", "user"].forEach(k => localStorage.removeItem(k));
+        window.location.replace("{% url 'login_page' %}");
+    };
+    const profile = (token) => fetch("{% url 'user_profile' %}", {
+        headers: { "Authorization": "Bearer " + token },
+    });
+
+    const access  = localStorage.getItem("access_token");
+    const refresh = localStorage.getItem("refresh_token");
+    if (!access || !refresh) return toLogin();
+
+    try {
+        let res = await profile(access);
+        if (res.status === 401) {
+            const r = await fetch("{% url 'token_refresh' %}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh }),
+            });
+            const body = await r.json().catch(() => ({}));
+            const newAccess = body.access || (body.data && body.data.access);
+            if (!r.ok || !newAccess) return toLogin();
+            localStorage.setItem("access_token", newAccess);
+            res = await profile(newAccess);
+        }
+        if (!res.ok) return toLogin();
+        const body = await res.json();
+        // only super admins may view this page
+        if (body.data.user.role !== "superadmin") {
+            return window.location.replace("{% url 'dashboard' %}");
+        }
+    } catch (_) {
+        return toLogin();
+    }
+    document.getElementById("auth-guard-style").remove();
+    loadLogs(1);
+})();
+
+function badgeClass(action) {
+    const a = String(action || "").toLowerCase();
+    if (/creat|add|register/.test(a)) return "badge-green";
+    if (/updat|edit|change|modif/.test(a)) return "badge-blue";
+    if (/delet|remov|fail|block/.test(a)) return "badge-red";
+    if (/login|logout|token|auth/.test(a)) return "badge-purple";
+    return "badge-orange";
+}
+
+async function loadLogs(page) {
+    const body = document.getElementById("audit-body");
+    const res = await fetch("{% url 'audit_logs' %}?page=" + page, {
+        headers: { "Authorization": "Bearer " + localStorage.getItem("access_token") },
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        body.innerHTML = '<tr><td colspan="6">Unable to load audit logs.</td></tr>';
+        return;
+    }
+    const d = json.data;
+    body.innerHTML = "";
+    if (!d.results.length) {
+        body.innerHTML = '<tr><td colspan="6">No audit logs yet.</td></tr>';
+    }
+    for (const l of d.results) {
+        const tr = document.createElement("tr");
+        [
+            new Date(l.created_at).toLocaleString(),
+            l.user || "-",
+            l.action,
+            l.model_name ? l.model_name + (l.object_id ? " #" + l.object_id : "") : "-",
+            l.description || "-",
+            l.ip_address || "-",
+        ].forEach(v => {
+            const td = document.createElement("td");
+            td.textContent = v;
+            tr.appendChild(td);
+        });
+        const actionCell = tr.children[2];
+        const badge = document.createElement("span");
+        badge.className = "badge " + badgeClass(l.action);
+        badge.textContent = l.action;
+        actionCell.textContent = "";
+        actionCell.appendChild(badge);
+        body.appendChild(tr);
+    }
+    document.getElementById("page-info").textContent = "Page " + d.page + " of " + d.total_pages;
+    const prev = document.getElementById("prev-btn");
+    const next = document.getElementById("next-btn");
+    prev.disabled = d.page <= 1;
+    next.disabled = d.page >= d.total_pages;
+    prev.onclick = () => loadLogs(d.page - 1);
+    next.onclick = () => loadLogs(d.page + 1);
+}
+</script>
+
+{% include "nav/nav.html" %}
+<div class="audit-page">
+    <h1>Audit Log</h1>
+    <div class="audit-table-wrap">
+        <table class="audit-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>Target</th>
+                    <th>Description</th>
+                    <th>IP</th>
+                </tr>
+            </thead>
+            <tbody id="audit-body"></tbody>
+        </table>
+    </div>
+    <div class="audit-pager">
+        <button id="prev-btn" disabled>Previous</button>
+        <span id="page-info"></span>
+        <button id="next-btn" disabled>Next</button>
+    </div>
+</div>
+<style>
+.audit-page { max-width: 100%; }
+.audit-page h1 { margin-top: 0; font-size: 1.6rem; color: #1f2933; }
+.audit-table-wrap { width: 100%; overflow-x: auto; background: #fff; border: 1px solid #e3e8ef; border-radius: 8px; }
+.audit-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+.audit-table th { text-align: left; background: #087f8c; color: #fff; padding: 10px 12px; white-space: nowrap; font-weight: 600; }
+.audit-table td { padding: 10px 12px; border-bottom: 1px solid #eef1f5; vertical-align: top; overflow-wrap: anywhere; color: #1f2933; }
+.audit-table tbody tr:hover { background: #f6f9fb; }
+.audit-table td:first-child { white-space: nowrap; color: #52606d; }
+.audit-table td:nth-child(5) { min-width: 200px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: .75rem; font-weight: 600; text-transform: uppercase; background: #eef1f5; color: #52606d; }
+.badge-red { background: #fdecec; color: #b42318; }
+.audit-pager { margin-top: 14px; display: flex; gap: 12px; align-items: center; color: #52606d; }
+.audit-pager button { border: 1px solid #087f8c; background: #fff; color: #087f8c; padding: 6px 14px; border-radius: 6px; cursor: pointer; }
+.audit-pager button:hover:not(:disabled) { background: #087f8c; color: #fff; }
+.audit-pager button:disabled { border-color: #d0d6dd; color: #a0a8b1; cursor: not-allowed; }
+@media (max-width: 768px) {
+    body { padding-left: 0; }
+    .sidebar { position: static; width: auto; }
+}
+</style>
+{% endblock %}

@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from apps.core.serializers.auth import SessionTokenRefreshSerializer
-from apps.core.views.web import auth, users, profile
+from apps.core.views.web import auth, users, profile, audit
 
 
 urlpatterns = [
@@ -19,6 +19,9 @@ urlpatterns = [
 
     #user profile urls
     path('userprofile/<int:pk>/update/', profile.UpdateUserProfile.as_view(), name="update_user_profile"),
+
+    # audit logs (superadmin only)
+    path('audit-logs/', audit.AuditLogListView.as_view(), name="audit_logs"),
 
     # dealer profile update
     path('dealerprofile/<int:pk>/update/', profile.UpdateDealerProfile.as_view(), name="update_dealer_profile"),

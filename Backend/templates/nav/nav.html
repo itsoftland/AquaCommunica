@@ -2,6 +2,7 @@
     <h2 class="brand">AquaCommunica</h2>
     <ul>
         <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
+        <li id="audit-log-link" hidden><a href="{% url 'audit_log_page' %}">Audit Log</a></li>
     </ul>
     <div class="sidebar-bottom">
         <div id="user-email" style="padding: 10px 12px; font-size: .9rem; opacity: .85; overflow-wrap: anywhere;"></div>
@@ -13,6 +14,9 @@
 try {
     const user = JSON.parse(localStorage.getItem("user") || "{}");
     document.getElementById("user-email").textContent = user.email || "";
+    if (user.role === "superadmin") {
+        document.getElementById("audit-log-link").hidden = false;
+    }
 } catch (_) {}
 
 document.getElementById("logout-btn").addEventListener("click", async (e) => {
