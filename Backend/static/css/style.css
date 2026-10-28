@@ -13,6 +13,8 @@ body {
     color: white;
     padding: 20px;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
 }
 
 .sidebar .brand {
@@ -39,4 +41,10 @@ body {
 
 .sidebar a:hover {
     background: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar-bottom {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
 }

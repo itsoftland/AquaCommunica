@@ -1,6 +1,37 @@
 <nav class="sidebar">
     <h2 class="brand">AquaCommunica</h2>
     <ul>
-        <li><a href="/">Home</a></li>
+        <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
     </ul>
+    <div class="sidebar-bottom">
+        <div id="user-email" style="padding: 10px 12px; font-size: .9rem; opacity: .85; overflow-wrap: anywhere;"></div>
+        <a href="#" id="logout-btn">Logout</a>
+    </div>
 </nav>
+
+<script>
+try {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    document.getElementById("user-email").textContent = user.email || "";
+} catch (_) {}
+
+document.getElementById("logout-btn").addEventListener("click", async (e) => {
+    e.preventDefault();
+    const access  = localStorage.getItem("access_token");
+    const refresh = localStorage.getItem("refresh_token");
+    try {
+        await fetch("{% url 'logout' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + access,
+            },
+            body: JSON.stringify({ refresh }),
+        });
+    } catch (_) { /* clear local session regardless */ }
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("user");
+    window.location.href = "{% url 'login_page' %}";
+});
+</script>

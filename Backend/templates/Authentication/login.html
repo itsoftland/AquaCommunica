@@ -579,7 +579,7 @@
             localStorage.setItem("user", JSON.stringify(user));
 
             btnText.textContent = "Success!";
-            window.location.href = "{% url 'demo' %}";
+            window.location.href = "{% url 'dashboard' %}";
         } catch (err) {
             showError("Unable to reach the server. Please try again.");
         } finally {

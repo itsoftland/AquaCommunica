@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Dashboard | AquaCommunica{% endblock %}
+
+{% block content %}
+{# Hidden until the session is verified, so logged-out visitors never see the page #}
+<style id="auth-guard-style">body { visibility: hidden; }</style>
+<script>
+(async () => {
+    const toLogin = () => {
+        ["access_token", "refresh_token", "user"].forEach(k => localStorage.removeItem(k));
+        window.location.replace("{% url 'login_page' %}");
+    };
+    const profile = (token) => fetch("{% url 'user_profile' %}", {
+        headers: { "Authorization": "Bearer " + token },
+    });
+
+    const access  = localStorage.getItem("access_token");
+    const refresh = localStorage.getItem("refresh_token");
+    if (!access || !refresh) return toLogin();
+
+    try {
+        let res = await profile(access);
+        if (res.status === 401) {
+            // access token expired: try to renew it with the refresh token
+            const r = await fetch("{% url 'token_refresh' %}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh }),
+            });
+            const body = await r.json().catch(() => ({}));
+            const newAccess = body.access || (body.data && body.data.access);
+            if (!r.ok || !newAccess) return toLogin();
+            localStorage.setItem("access_token", newAccess);
+            res = await profile(newAccess);
+        }
+        if (!res.ok) return toLogin();
+    } catch (_) {
+        return toLogin();
+    }
+    document.getElementById("auth-guard-style").remove();
+})();
+</script>
+
+{% include "nav/nav.html" %}
+<h1>Dashboard</h1>
+{% endblock %}
