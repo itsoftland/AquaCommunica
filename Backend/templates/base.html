@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,25 +7,16 @@
 
     <title>{% block title %}AquaCommunica{% endblock %}</title>
 
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: #f4f7fb;
-        }
-
-        .container {
-            padding: 25px;
-        }
-    </style>
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
 <body>
-    {% include "nav/nav.html" %}
 
     <main class="container">
         {% block content %}
         {% endblock %}
     </main>
 
+    <script src="{% static 'js/main.js' %}"></script>
 </body>
 </html>
