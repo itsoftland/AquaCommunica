@@ -258,3 +258,51 @@ class ListDealerProfiles(APIView):
             data=serializer.data,
             status=status.HTTP_200_OK,
         )
+
+
+class DealerProfileDetails(APIView):
+
+    permission_classes = [
+        IsAuthenticated,
+        IsSuperAdmin,
+    ]
+
+    def get(self, request, pk):
+
+        try:
+            profile = get_dealer_profile(pk)
+        except DealerProfile.DoesNotExist:
+
+            action_log.warning(
+                f"Dealer profile fetch failed, profile not found: id={pk}, "
+                f"requested_by={request.user.id}"
+            )
+
+            return error_response(
+                f"Dealer Profile with ID = {pk} not found",
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if profile.created_by != request.user:
+        
+            action_log.warning(
+                f"Dealer profile fetch denied: id={pk}, "
+                f"requested_by={request.user.id}"
+            )
+
+            return error_response(
+                message="you dont have permission to access this profile",
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = DealerProfileDisplaySerializer(profile)
+        
+        action_log.info(
+            f"Dealer profile fetched: id={pk}, requested_by={request.user.id}"
+        )
+
+        return success_response(
+            message="Dealer profile fetched successfully.",
+            data=serializer.data,
+            status=status.HTTP_200_OK,
+        )

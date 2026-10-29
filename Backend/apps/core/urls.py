@@ -28,4 +28,6 @@ urlpatterns = [
     # dealer profile update
     path('dealerprofile/<int:pk>/update/', profile.UpdateDealerProfile.as_view(), name="update_dealer_profile"),
     path('get-dealer-profile-list/', profile.ListDealerProfiles.as_view(), name="get_dealer_profile_list"),
+    path('dealer-profile-details/<int:pk>/', profile.DealerProfileDetails.as_view(), name="dealer_profile_details"),
+    
 ]

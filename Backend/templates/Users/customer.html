@@ -499,18 +499,18 @@ async function loadCustomers() {
         </table>
     </div>
 </div>
-<div id="add-modal" class="modal-overlay" hidden>
-    <div class="modal">
-        <h2>Add Customer</h2>
-        <form id="add-form" novalidate>
+<div id="add-modal" class="modal-overlay" hidden onclick="if (event.target === this) closeAddModal()">
+    <div class="modal edit-modal-box">
+        <div class="modal-head">
+            <h2>Add Customer</h2>
+            <button type="button" class="modal-close" onclick="closeAddModal()" aria-label="Close">&times;</button>
+        </div>
+        <form id="add-form" class="edit-form create-form" novalidate>
             <label>Email<input type="email" name="email" required autocomplete="off"></label>
             <label>Password<input type="password" name="password" minlength="6" required autocomplete="new-password"></label>
             <label>Confirm Password<input type="password" name="password_confirm" required autocomplete="new-password"></label>
-            <div id="add-error" class="sync-error" hidden></div>
-            <div class="modal-actions">
-                <button type="button" class="action-btn" onclick="closeAddModal()">Cancel</button>
-                <button type="submit" class="action-btn primary" id="add-submit">Create</button>
-            </div>
+            <div id="add-error" class="form-error" hidden></div>
+            <button type="submit" class="btn-action btn-edit" id="add-submit">Create</button>
         </form>
     </div>
 </div>
@@ -540,10 +540,13 @@ async function loadCustomers() {
         </div>
     </div>
 </div>
-<div id="edit-modal" class="modal-overlay" hidden>
-    <div class="modal">
-        <h2>Update Profile</h2>
-        <form id="edit-form" novalidate>
+<div id="edit-modal" class="modal-overlay" hidden onclick="if (event.target === this) closeEditModal()">
+    <div class="modal edit-modal-box">
+        <div class="modal-head">
+            <h2>Update Profile</h2>
+            <button type="button" class="modal-close" onclick="closeEditModal()" aria-label="Close">&times;</button>
+        </div>
+        <form id="edit-form" class="edit-form" novalidate>
             <label>First Name<input type="text" name="first_name"></label>
             <label>Last Name<input type="text" name="last_name"></label>
             <label>Phone Number<input type="text" name="phone_number"></label>
@@ -553,11 +556,8 @@ async function loadCustomers() {
             <label>State<input type="text" name="state"></label>
             <label>Pincode<input type="text" name="pincode"></label>
             <label>GST Number<input type="text" name="gst_number"></label>
-            <div id="edit-error" class="sync-error" hidden></div>
-            <div class="modal-actions">
-                <button type="button" class="action-btn" onclick="closeEditModal()">Cancel</button>
-                <button type="submit" class="action-btn primary" id="edit-submit">Save</button>
-            </div>
+            <div id="edit-error" class="form-error" hidden></div>
+            <button type="submit" class="btn-action btn-edit" id="edit-submit">Save</button>
         </form>
     </div>
 </div>
@@ -566,8 +566,7 @@ async function loadCustomers() {
 .customer-page h1 { margin: 0; font-size: 1.6rem; color: #1f2933; }
 .page-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .add-btn { padding: 8px 16px; font-weight: 600; }
-#add-form label, #edit-form label { display: block; margin-bottom: 12px; color: #52606d; font-size: .9rem; }
-#add-form input, #edit-form input { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px 10px; border: 1px solid #d0d6dd; border-radius: 6px; font-size: 1rem; }
+.create-form { grid-template-columns: 1fr; }
 .customer-table-wrap { width: 100%; overflow-x: auto; background: #fff; border: 1px solid #e3e8ef; border-radius: 8px; }
 .customer-table-wrap { scrollbar-width: thin; scrollbar-color: #b8c2cc transparent; }
 .customer-table-wrap::-webkit-scrollbar { height: 6px; }
@@ -592,6 +591,19 @@ async function loadCustomers() {
 .modal-note { margin: 0 0 12px; color: #52606d; font-size: .9rem; }
 .modal tr.changed td { background: #fff8e1; font-weight: 600; }
 .sync-error { background: #fdecec; color: #b42318; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; }
+.edit-modal-box { max-width: 640px; }
+.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.modal-head h2 { margin: 0; font-size: 1.25rem; color: #1f2933; }
+.modal-close { background: none; border: 0; font-size: 1.6rem; cursor: pointer; color: #52606d; }
+.edit-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.edit-form label { display: flex; flex-direction: column; font-size: .85rem; font-weight: 600; color: #52606d; gap: 4px; margin: 0; }
+.edit-form input { padding: 7px 8px; border: 1px solid #cbd2d9; border-radius: 4px; font-size: .9rem; margin: 0; }
+.form-error { grid-column: 1 / -1; color: #b42318; font-size: .85rem; }
+.form-error[hidden] { display: none; }
+.btn-action { border: 0; border-radius: 4px; padding: 4px 10px; font-size: .8rem; font-weight: 600; color: #fff; cursor: pointer; }
+.btn-edit { background: #1a7f45; }
+.btn-action:disabled { opacity: .6; cursor: default; }
+.edit-form .btn-action { grid-column: 1 / -1; justify-self: start; padding: 8px 18px; }
 .modal-actions { margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px; }
 .action-btn.primary { background: #087f8c; color: #fff; }
 .action-btn.primary:disabled { background: #d0d6dd; color: #fff; border-color: #d0d6dd; }
