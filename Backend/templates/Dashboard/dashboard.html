@@ -42,5 +42,102 @@
 </script>
 
 {% include "nav/nav.html" %}
-<h1>Dashboard</h1>
+<div class="dash">
+    <section class="dash-hero">
+        <div>
+            <p class="dash-eyebrow" id="dash-date"></p>
+            <h1 id="dash-greeting">Welcome</h1>
+            <p class="dash-sub">Manage your customers, dealers and licenses from one place.</p>
+        </div>
+        <span class="dash-role" id="dash-role" hidden></span>
+    </section>
+
+    <h2 class="dash-section">Quick access</h2>
+    <div class="dash-cards">
+        <a class="dash-card" id="card-customer" href="{% url 'customer_page' %}" hidden>
+            <span class="dash-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            <h3>Customers</h3>
+            <p>Add customers, edit profiles and manage license sync.</p>
+            <span class="dash-go">Open &rarr;</span>
+        </a>
+        <a class="dash-card" id="card-dealer" href="{% url 'dealer_page' %}" hidden>
+            <span class="dash-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11h16V9"/><path d="M9 20v-6h6v6"/></svg></span>
+            <h3>Dealers</h3>
+            <p>Create dealer accounts and review their profiles.</p>
+            <span class="dash-go">Open &rarr;</span>
+        </a>
+        <a class="dash-card" id="card-audit" href="{% url 'audit_log_page' %}" hidden>
+            <span class="dash-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span>
+            <h3>Audit Log</h3>
+            <p>Track who did what, and when, across the system.</p>
+            <span class="dash-go">Open &rarr;</span>
+        </a>
+    </div>
+</div>
+
+<style>
+.dash { max-width: 1100px; }
+.dash-hero {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+    padding: 32px 36px; border-radius: 16px; color: #fff;
+    background: radial-gradient(circle at 90% 0%, rgba(255,255,255,.22), transparent 45%),
+                linear-gradient(135deg, #087f8c 0%, #05545e 100%);
+    box-shadow: 0 10px 30px rgba(8, 127, 140, .3);
+    animation: dash-in .5s ease both;
+}
+.dash-eyebrow { margin: 0 0 6px; font-size: .8rem; letter-spacing: .12em; text-transform: uppercase; opacity: .75; }
+.dash-hero h1 { margin: 0 0 8px; font-size: 2rem; overflow-wrap: anywhere; }
+.dash-sub { margin: 0; opacity: .85; max-width: 480px; line-height: 1.5; }
+.dash-role {
+    padding: 6px 14px; border-radius: 999px; font-size: .78rem; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
+    background: rgba(255,255,255,.2); border: 1px solid rgba(255,255,255,.35);
+}
+.dash-section { margin: 32px 0 14px; font-size: 1.05rem; color: #52606d; text-transform: uppercase; letter-spacing: .08em; }
+.dash-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; }
+.dash-card {
+    display: block; padding: 24px; background: #fff; border-radius: 14px; text-decoration: none; color: #1f2933;
+    border: 1px solid #e3e8ef; box-shadow: 0 1px 3px rgba(16,24,40,.06);
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    animation: dash-in .5s ease both;
+}
+.dash-card[hidden] { display: none; }
+.dash-card:hover { transform: translateY(-4px); border-color: #087f8c; box-shadow: 0 12px 28px rgba(8,127,140,.18); }
+.dash-icon {
+    display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px;
+    border-radius: 14px; margin-bottom: 14px; color: #087f8c; background: #e6f4f5;
+    transition: background .2s ease, color .2s ease;
+}
+.dash-card:hover .dash-icon { background: #087f8c; color: #fff; }
+.dash-card h3 { margin: 0 0 6px; font-size: 1.15rem; }
+.dash-card p { margin: 0 0 16px; color: #52606d; font-size: .92rem; line-height: 1.5; }
+.dash-go { color: #087f8c; font-weight: 600; font-size: .9rem; }
+@keyframes dash-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@media (max-width: 768px) {
+    .dash-hero { flex-direction: column; padding: 24px; }
+    .dash-hero h1 { font-size: 1.5rem; }
+}
+</style>
+<script>
+try {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const hour = new Date().getHours();
+    const part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+    const name = (user.email || "").split("@")[0];
+    document.getElementById("dash-greeting").textContent = name ? part + ", " + name : part;
+    document.getElementById("dash-date").textContent =
+        new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+    if (user.role) {
+        const r = document.getElementById("dash-role");
+        r.textContent = user.role;
+        r.hidden = false;
+    }
+    if (user.role === "superadmin" || user.role === "dealer") document.getElementById("card-customer").hidden = false;
+    if (user.role === "superadmin") {
+        document.getElementById("card-dealer").hidden = false;
+        document.getElementById("card-audit").hidden = false;
+    }
+    document.querySelectorAll(".dash-card").forEach((c, i) => c.style.animationDelay = (0.1 + i * 0.08) + "s");
+} catch (_) {}
+</script>
 {% endblock %}

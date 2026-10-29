@@ -612,7 +612,13 @@ async function loadCustomers() {
 .badge-red { background: #fdecec; color: #b42318; }
 @media (max-width: 768px) {
     body { padding-left: 0; }
-    .sidebar { position: static; width: auto; }
+    .customer-page h1 { font-size: 1.3rem; }
+    .page-head { flex-wrap: wrap; gap: 10px; }
+    .modal { padding: 16px; max-height: 92vh; }
+    .modal .customer-table { display: block; overflow-x: auto; }
+    .edit-form { grid-template-columns: 1fr; }
+    .modal-actions { flex-wrap: wrap; }
+    .modal-actions .action-btn { flex: 1 1 120px; }
 }
 </style>
 {% endblock %}

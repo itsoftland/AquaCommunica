@@ -363,7 +363,11 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMod
 .badge-red { background: #fdecec; color: #b42318; }
 @media (max-width: 768px) {
     body { padding-left: 0; }
-    .sidebar { position: static; width: auto; }
+    .page-head { flex-wrap: wrap; gap: 10px; }
+    .modal { padding: 16px; max-height: 92vh; }
+    .modal .customer-table { display: block; overflow-x: auto; }
+    .edit-form { grid-template-columns: 1fr; }
+    .modal-actions { flex-wrap: wrap; }
 }
 </style>
 {% endblock %}
