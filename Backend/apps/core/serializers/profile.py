@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from ..models.profiles import UserProfile, DealerProfile
 
+DEFAULT_GST_NUMBER = '000000000000000'
+
 
 class BaseProfileUpdateSerializer(serializers.ModelSerializer):
 
@@ -18,8 +20,12 @@ class BaseProfileUpdateSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, attrs):
-        if attrs.get('gst_number') is None:
-            attrs['gst_number'] = '000000000000000'
+        if 'gst_number' in attrs:
+            gst = attrs['gst_number']
+            if gst is None or not str(gst).strip():
+                attrs['gst_number'] = DEFAULT_GST_NUMBER
+        elif not (self.instance and self.instance.gst_number):
+            attrs['gst_number'] = DEFAULT_GST_NUMBER
 
         return attrs
 

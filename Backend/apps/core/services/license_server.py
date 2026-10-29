@@ -40,7 +40,7 @@ def buid_license_registration_payload(profile):
         "CustomerName":          profile.first_name,
         "PhoneNumber":           profile.phone_number,
         "CustomerEmail":         profile.contact_email,
-        "GSTNumber":             profile.gst_number or '',
+        "GSTNumber":             profile.gst_number or '000000000000000',
         "CustomerContactPerson": profile.first_name + " " + profile.last_name,
         "CustomerAddress":       profile.address,
 

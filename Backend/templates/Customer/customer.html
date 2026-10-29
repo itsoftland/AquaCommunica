@@ -54,7 +54,7 @@ async function licenseAction(urlTemplate, id, btn) {
     btn.disabled = true;
     btn.textContent = "Please wait...";
     try {
-        const res = await fetch(urlTemplate.replace(/0\/$/, id + "/"), {
+        const res = await fetch(apiUrl(urlTemplate, id), {
             method: "POST",
             headers: { "Authorization": "Bearer " + localStorage.getItem("access_token") },
         });
@@ -267,7 +267,7 @@ const SYNC_FIELDS = [
 ];
 
 function apiUrl(template, id) {
-    return template.replace(/0\/$/, id + "/");
+    return template.replace(/\/0\//, "/" + id + "/");
 }
 
 function closeSyncModal() {
@@ -393,7 +393,7 @@ async function validateThenSync(id, btn) {
 
 async function loadCustomers() {
     const body = document.getElementById("customer-body");
-    const cols = 10;
+    const cols = 11;
     const message = (text) => {
         body.innerHTML = "";
         const tr = document.createElement("tr");
@@ -422,6 +422,7 @@ async function loadCustomers() {
             p.user_email,
             p.city,
             p.total_device_count,
+            p.validity_from_date,
             p.validity_to_date,
             p.authentication_status,
             p.is_profile_active ? "Active" : "Inactive",
@@ -486,6 +487,7 @@ async function loadCustomers() {
                     <th>Email</th>
                     <th>City</th>
                     <th>Devices</th>
+                    <th>Valid From</th>
                     <th>Valid Till</th>
                     <th>Authentication</th>
                     <th>Status</th>
@@ -493,7 +495,7 @@ async function loadCustomers() {
                     <th>Actions</th>
                 </tr>
             </thead>
-            <tbody id="customer-body"><tr><td colspan="10">Loading...</td></tr></tbody>
+            <tbody id="customer-body"><tr><td colspan="11">Loading...</td></tr></tbody>
         </table>
     </div>
 </div>
