@@ -5,14 +5,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from ...services.get_usr_profile import get_user_profile, get_user_profiles_list
-from ...services.get_dlr_profile import get_dealer_profile
+from ...services.get_dlr_profile import get_dealer_profile, get_dealer_profiles_list
 from ...models.customuser import CustomUser
 from ...models.profiles import UserProfile, DealerProfile
 from ...utlis.responses import error_response, success_response
 from ...utlis.audit import record_audit
 from ...models.audit import AuditLog
 from ...permissions import CanManageUserProfiles, IsSuperAdmin
-from ...serializers.profile import UserProfileUpdateSerializer, DealerProfileUpdateSerializer, UserProfileDisplaySerializer
+from ...serializers.profile import UserProfileUpdateSerializer, DealerProfileUpdateSerializer, UserProfileDisplaySerializer, DealerProfileDisplaySerializer
 
 
 action_log = logging.getLogger('aquacommunica.action.log')
@@ -225,6 +225,36 @@ class UserProfileDetailes(APIView):
 
         return success_response(
             message="User profile fetched successfully.",
+            data=serializer.data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class ListDealerProfiles(APIView):
+
+    permission_classes = [
+        IsAuthenticated,
+        IsSuperAdmin
+    ]
+
+    def get(self, request):
+
+        user = request.user
+
+        user_created_profiles = get_dealer_profiles_list(user)
+
+        serializer = DealerProfileDisplaySerializer(
+            user_created_profiles,
+            many=True
+        )
+
+        action_log.info(
+            f"Dealer profiles listed: count={len(serializer.data)}, "
+            f"requested_by={user.id}"
+        )
+
+        return success_response(
+            message="Dealer profiles fetched successfully.",
             data=serializer.data,
             status=status.HTTP_200_OK,
         )

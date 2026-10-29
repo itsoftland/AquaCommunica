@@ -72,6 +72,41 @@ class UserProfileDisplaySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class DealerProfileDisplaySerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+
+    class Meta:
+        model = DealerProfile
+        fields = [
+            'id',
+            'user',
+            'user_email',
+            'profile_id',
+            'first_name',
+            'last_name',
+            'phone_number',
+            'contact_email',
+            'address',
+            'city',
+            'state',
+            'pincode',
+            'gst_number',
+            'authentication_status',
+            'is_profile_active',
+            'validity_from_date',
+            'validity_to_date',
+            'total_licence_unit',
+            'total_user_count',
+            'parent_user_count',
+            'child_user_count',
+            'total_device_count',
+            'created_by',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = fields
+
+
 class UserProfileUpdateSerializer(BaseProfileUpdateSerializer):
 
     class Meta(BaseProfileUpdateSerializer.Meta):
