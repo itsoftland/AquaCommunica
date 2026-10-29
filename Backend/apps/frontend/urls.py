@@ -7,4 +7,5 @@ urlpatterns = [
     path('audit-logs/', vw.audit_log_page, name="audit_log_page"),
     path('customers/', vw.customer_page, name="customer_page"),
     path('dealers/', vw.dealer_Page, name="dealer_page"),
+    path('users/', vw.user_page, name="user_page"),
 ]

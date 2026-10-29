@@ -16,7 +16,7 @@
     body { padding-left: 0; }
     .container { padding: 0; }
 
-    .login-wrap { min-height: 100vh; display: flex; }
+    .login-wrap { display: flex; }
 
     /* Water-drop cursor (tip of the drop is the hotspot) */
     .login-wrap { cursor: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='34' viewBox='0 0 28 34'><path d='M14 2C14 2 4.5 13 4.5 20a9.5 9.5 0 0 0 19 0C23.5 13 14 2 14 2z' fill='%23159fb0' stroke='white' stroke-width='2' stroke-linejoin='round'/><path d='M9.5 20a4.5 4.5 0 0 0 3.2 4.3' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' opacity='.8'/></svg>") 14 2, auto; }
@@ -122,9 +122,39 @@
     .login-card.shake { animation: shake .4s; }
     .login-error.show { animation: slide-up .3s ease-out; }
 
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    .login-wrap { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+    .login-panel { overflow-y: auto; min-height: 0; }
+
+    /* Tablet: slightly tighter art panel */
+    @media (max-width: 1024px) {
+        .login-art { padding: 32px; }
+        .login-art h2 { font-size: 1.6rem; }
+    }
+
+    /* Phone / small tablet: stack, art becomes a compact banner */
     @media (max-width: 800px) {
+        .login-wrap { flex-direction: column; }
+        .login-art { flex: 0 1 28%; min-height: 110px; padding: 20px; }
+        .login-art h2 { font-size: 1.3rem; margin-bottom: 0; }
+        .login-art p, .login-art .d3 { display: none; }
+        .login-panel { flex: 1 1 0; align-items: center; padding: 16px; }
+        .login-card { max-width: 460px; margin-top: -48px; position: relative; z-index: 2; }
+    }
+
+    /* Touch devices: 16px inputs prevent iOS zoom, bigger tap targets */
+    @media (hover: none) and (pointer: coarse) {
+        .login-card input:not([type="checkbox"]) { font-size: 16px; min-height: 44px; }
+        .login-card button[type="submit"] { min-height: 46px; }
+        .pw-toggle { height: 44px !important; min-width: 44px; }
+    }
+
+    /* Short landscape screens */
+    @media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+        .login-wrap { flex-direction: row; }
         .login-art { display: none; }
-        .login-panel { flex-basis: 100%; }
+        .login-panel { align-items: flex-start; }
+        .login-card { margin-top: 0; padding: 20px 24px; }
     }
 
     .login-card h1 {
@@ -228,7 +258,11 @@
         border-left: 3px solid var(--danger);
     }
 
-    @media (max-width: 480px) { .login-card { padding: 24px 18px; } }
+    @media (max-width: 480px) {
+        .login-card { padding: 24px 18px; border-radius: 10px; }
+        .login-card h1 { font-size: 1.4rem; }
+    }
+    @media (max-width: 340px) { .login-panel { padding-left: 10px; padding-right: 10px; } }
 </style>
 
 <div class="login-wrap">
@@ -402,8 +436,8 @@
     }
 
     /* ----- Water-drop trail that follows the cursor ----- */
-    if (!reduceMotion) {
-        const trail = document.createElement("canvas");
+    if (!reduceMotion && window.matchMedia("(hover: hover)").matches) {
+        const trail =document.createElement("canvas");
         trail.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999";
         document.body.appendChild(trail);
         const tctx = trail.getContext("2d");

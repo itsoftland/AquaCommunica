@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+{% block title %}Users | AquaCommunica{% endblock %}
+
+{% block content %}
+<style id="auth-guard-style">body { visibility: hidden; }</style>
+<script>
+(async () => {
+    const toLogin = () => {
+        ["access_token", "refresh_token", "user"].forEach(k => localStorage.removeItem(k));
+        window.location.replace("{% url 'login_page' %}");
+    };
+    const profile = (token) => fetch("{% url 'user_profile' %}", {
+        headers: { "Authorization": "Bearer " + token },
+    });
+
+    const access  = localStorage.getItem("access_token");
+    const refresh = localStorage.getItem("refresh_token");
+    if (!access || !refresh) return toLogin();
+
+    try {
+        let res = await profile(access);
+        if (res.status === 401) {
+            const r = await fetch("{% url 'token_refresh' %}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh }),
+            });
+            const body = await r.json().catch(() => ({}));
+            const newAccess = body.access || (body.data && body.data.access);
+            if (!r.ok || !newAccess) return toLogin();
+            localStorage.setItem("access_token", newAccess);
+            res = await profile(newAccess);
+        }
+        if (!res.ok) return toLogin();
+        const body = await res.json();
+        // only super admins and dealers may view this page
+        if (!["superadmin", "dealer"].includes(body.data.user.role)) {
+            return window.location.replace("{% url 'dashboard' %}");
+        }
+    } catch (_) {
+        return toLogin();
+    }
+    document.getElementById("auth-guard-style").remove();
+    loadUsers();
+})();
+
+// fetch with the access token; on 401 refresh it once and retry
+async function authFetch(url, opts = {}) {
+    const send = () => fetch(url, {
+        ...opts,
+        headers: { ...(opts.headers || {}), "Authorization": "Bearer " + localStorage.getItem("access_token") },
+    });
+    let res = await send();
+    if (res.status !== 401) return res;
+    const r = await fetch("{% url 'token_refresh' %}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh: localStorage.getItem("refresh_token") }),
+    });
+    const b = await r.json().catch(() => ({}));
+    const access = b.access || (b.data && b.data.access);
+    if (!r.ok || !access) return res;
+    localStorage.setItem("access_token", access);
+    return send();
+}
+
+const SOFT_DELETE_URL = "{% url 'user_soft_delete' 0 %}";
+const RESTORE_URL = "{% url 'user_restore' 0 %}";
+const HARD_DELETE_URL = "{% url 'user_hard_delete' 0 %}";
+
+const CREATE_USER_URL = "{% url 'user_registration' %}";
+const ROLES_BY_CREATOR = {
+    superadmin: [["executive", "Executive"], ["dealer", "Dealer"], ["production", "Production"], ["user_admin", "User Admin"]],
+    executive: [["user_admin", "User Admin"]],
+    dealer: [["user_admin", "User Admin"]],
+    user_admin: [["parent_user", "Parent User"], ["child_user", "Child User"]],
+};
+
+function flattenErrors(v) {
+    if (v === null || v === undefined) return "";
+    if (typeof v === "string") return v;
+    if (Array.isArray(v)) return v.map(flattenErrors).join(" ");
+    if (typeof v === "object") {
+        return Object.entries(v).map(([k, x]) => k + ": " + flattenErrors(x)).join("; ");
+    }
+    return String(v);
+}
+
+function openAddUser() {
+    let me = {};
+    try { me = JSON.parse(localStorage.getItem("user") || "{}"); } catch (_) {}
+    const select = document.getElementById("add-role");
+    select.innerHTML = "";
+    for (const [value, label] of (ROLES_BY_CREATOR[me.role] || [])) {
+        select.add(new Option(label, value));
+    }
+    document.getElementById("add-form").reset();
+    document.getElementById("add-error").textContent = "";
+    document.getElementById("add-modal").hidden = false;
+}
+function closeAddUser() { document.getElementById("add-modal").hidden = true; }
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAddUser(); });
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("add-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const f = e.target;
+        const err = document.getElementById("add-error");
+        const submit = document.getElementById("add-submit");
+        err.textContent = "";
+        if (!f.reportValidity()) return;
+        submit.disabled = true;
+        try {
+            const res = await authFetch(CREATE_USER_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: f.email.value.trim(),
+                    role: f.role.value,
+                    password: f.password.value,
+                    password_confirm: f.password_confirm.value,
+                }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                err.textContent = flattenErrors(json.data || json.message || json.detail || json) || "Unable to create user.";
+            } else {
+                closeAddUser();
+                loadUsers();
+            }
+        } catch (_) {
+            err.textContent = "Network error. Please try again.";
+        }
+        submit.disabled = false;
+    });
+});
+
+function showToast(text) {
+    const t = document.createElement("div");
+    t.className = "toast";
+    t.textContent = text;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => t.classList.add("show"));
+    setTimeout(() => {
+        t.classList.remove("show");
+        setTimeout(() => t.remove(), 500);
+    }, 2000);
+}
+
+async function permanentDeleteUser(u, btn) {
+    if (!confirm("Permanently delete " + u.email + "? This cannot be undone.")) return;
+    btn.disabled = true;
+    try {
+        const res = await authFetch(HARD_DELETE_URL.replace(/0\/hard-delete\/$/, u.id + "/hard-delete/"), {
+            method: "DELETE",
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert((json.message || json.detail || "Unable to delete user.") + " (HTTP " + res.status + ")");
+            btn.disabled = false;
+            return;
+        }
+        showToast("User deleted successfully.");
+        loadUsers();
+    } catch (_) {
+        alert("Network error. Please try again.");
+        btn.disabled = false;
+    }
+}
+
+async function toggleUserActive(u, cb) {
+    const restoring = cb.checked;
+    const msg = restoring
+        ? "Restore " + u.email + "? The user will be reactivated."
+        : "Soft delete " + u.email + "? The user will be deactivated.";
+    if (!confirm(msg)) {
+        cb.checked = !restoring;
+        return;
+    }
+    cb.disabled = true;
+    const url = restoring
+        ? RESTORE_URL.replace(/0\/restore\/$/, u.id + "/restore/")
+        : SOFT_DELETE_URL.replace(/0\/soft-delete\/$/, u.id + "/soft-delete/");
+    try {
+        const res = await authFetch(url, { method: "PATCH" });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert((json.message || json.detail || "Unable to update user.") + " (HTTP " + res.status + ")");
+            cb.checked = !restoring;
+            cb.disabled = false;
+            return;
+        }
+        loadUsers();
+    } catch (_) {
+        alert("Network error. Please try again.");
+        cb.checked = !restoring;
+        cb.disabled = false;
+    }
+}
+
+async function loadUsers() {
+    const body = document.getElementById("user-body");
+    const cols = 10;
+    const message = (text) => {
+        body.innerHTML = "";
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = cols;
+        td.textContent = text;
+        tr.appendChild(td);
+        body.appendChild(tr);
+    };
+
+    let res, json;
+    try {
+        res = await authFetch("{% url 'users_list' %}");
+        json = await res.json().catch(() => ({}));
+    } catch (_) {
+        return message("Network error. Please try again.");
+    }
+    if (!res.ok) return message(json.message || "Unable to load users.");
+
+    const rows = json.data || [];
+    if (!rows.length) return message("No users yet.");
+
+    const fmtDate = (v) => v ? new Date(v).toLocaleDateString() : v;
+    body.innerHTML = "";
+    for (const u of rows) {
+        const tr = document.createElement("tr");
+        [
+            u.id,
+            [u.first_name, u.last_name].filter(Boolean).join(" "),
+            u.email,
+            u.role_display || u.role,
+            u.client_type ? u.client_type.charAt(0).toUpperCase() + u.client_type.slice(1) : null,
+            u.created_by_email,
+            u.is_verified ? "Verified" : "Unverified",
+            u.is_active ? "Active" : "Inactive",
+            fmtDate(u.created_at),
+            null,
+        ].forEach(v => {
+            const td = document.createElement("td");
+            td.textContent = (v === null || v === undefined || v === "") ? "-" : v;
+            tr.appendChild(td);
+        });
+        // verified badge (6) and status toggle (7)
+        const vCell = tr.children[6];
+        const badge = document.createElement("span");
+        badge.className = "badge " + (u.is_verified ? "badge-green" : "badge-red");
+        badge.textContent = vCell.textContent;
+        vCell.textContent = "";
+        vCell.appendChild(badge);
+
+        const sCell = tr.children[7];
+        sCell.textContent = "";
+        const sw = document.createElement("label");
+        sw.className = "switch";
+        sw.title = u.is_active ? "Active - switch off to soft delete" : "Inactive - switch on to restore";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = !!u.is_active;
+                cb.setAttribute("aria-label", "Active status for " + u.email);
+        const track = document.createElement("span");
+        track.className = "slider";
+        sw.append(cb, track);
+        const txt = document.createElement("span");
+        txt.className = "switch-text";
+        txt.textContent = u.is_active ? "Active" : "Inactive";
+        cb.addEventListener("change", () => toggleUserActive(u, cb));
+        sCell.append(sw, txt);
+
+        const aCell = tr.children[9];
+        aCell.textContent = "";
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "action-btn action-danger";
+        delBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
+        delBtn.title = "Permanently delete";
+        delBtn.setAttribute("aria-label", "Permanently delete " + u.email);
+        delBtn.addEventListener("click", () => permanentDeleteUser(u, delBtn));
+        aCell.append(delBtn);
+        body.appendChild(tr);
+    }
+}
+</script>
+
+{% include "nav/nav.html" %}
+<div class="customer-page">
+    <div class="page-head">
+        <h1>Users</h1>
+        <button type="button" class="btn-add" onclick="openAddUser()">+ Add User</button>
+    </div>
+    <div class="customer-table-wrap">
+        <table class="customer-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Client Type</th>
+                    <th>Created By</th>
+                    <th>Verified</th>
+                    <th>Status</th>
+                    <th>Created At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="user-body"><tr><td colspan="10">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+<div id="add-modal" class="modal-backdrop" hidden onclick="if (event.target === this) closeAddUser()">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h2>Add User</h2>
+            <button type="button" class="modal-close" onclick="closeAddUser()" aria-label="Close">&times;</button>
+        </div>
+        <form id="add-form" class="add-form" novalidate>
+            <label>Email<input type="email" name="email" required autocomplete="off"></label>
+            <label>Role<select name="role" id="add-role" required></select></label>
+            <label>Password<input type="password" name="password" minlength="6" required autocomplete="new-password"></label>
+            <label>Confirm Password<input type="password" name="password_confirm" required autocomplete="new-password"></label>
+            <div class="form-error" id="add-error"></div>
+            <button type="submit" class="btn-add" id="add-submit">Create</button>
+        </form>
+    </div>
+</div>
+<style>
+.customer-page { max-width: 100%; }
+.customer-page h1 { margin: 0; font-size: 1.6rem; color: #1f2933; }
+.page-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.customer-table-wrap { width: 100%; overflow-x: auto; background: #fff; border: 1px solid #e3e8ef; border-radius: 8px; scrollbar-width: thin; scrollbar-color: #b8c2cc transparent; }
+.customer-table-wrap::-webkit-scrollbar { height: 6px; }
+.customer-table-wrap::-webkit-scrollbar-thumb { background: #b8c2cc; border-radius: 3px; }
+.customer-table-wrap::-webkit-scrollbar-track { background: transparent; }
+.customer-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+.customer-table th { text-align: left; background: #087f8c; color: #fff; padding: 10px 12px; white-space: nowrap; font-weight: 600; }
+.customer-table td { padding: 10px 12px; border-bottom: 1px solid #eef1f5; vertical-align: top; color: #1f2933; white-space: nowrap; }
+.customer-table tbody tr:hover { background: #f6f9fb; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: .75rem; font-weight: 600; text-transform: uppercase; background: #eef1f5; color: #52606d; }
+.badge-green { background: #e6f6ec; color: #1a7f45; }
+.switch { position: relative; display: inline-block; width: 38px; height: 20px; vertical-align: middle; cursor: pointer; }
+.switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.slider { position: absolute; inset: 0; background: #b8c2cc; border-radius: 20px; transition: background .2s; }
+.slider::before { content: ""; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .2s; }
+.switch input:checked + .slider { background: #1a7f45; }
+.switch input:checked + .slider::before { transform: translateX(18px); }
+.switch input:disabled + .slider { opacity: .6; cursor: not-allowed; }
+.switch input:focus-visible + .slider { outline: 2px solid #087f8c; outline-offset: 2px; }
+.switch-text { margin-left: 8px; font-size: .8rem; font-weight: 600; vertical-align: middle; color: #52606d; }
+.action-btn { padding: 4px 10px; margin-right: 6px; border: 1px solid #087f8c; border-radius: 4px; background: #fff; color: #087f8c; font-size: .8rem; font-weight: 600; cursor: pointer; }
+.action-btn:hover { background: #087f8c; color: #fff; }
+.action-btn:disabled { opacity: .6; cursor: not-allowed; }
+.action-btn svg { display: block; }
+.toast { position: fixed; top: 20px; left: 50%; z-index: 1000; padding: 12px 20px; border-radius: 6px; background: #b42318; color: #fff; font-size: .95rem; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,.2); opacity: 0; transform: translate(-50%, -10px); transition: opacity .5s ease, transform .5s ease; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.action-danger { border: none; background: none; padding: 4px; color: #b42318; transition: transform .15s ease, color .15s ease; }
+.action-danger:hover { background: none; color: #7a1a10; transform: scale(1.2); }
+.action-danger:active { transform: scale(.95); }
+.badge-red { background: #fdecec; color: #b42318; }
+.btn-add { border: 0; border-radius: 4px; background: #087f8c; color: #fff; padding: 8px 16px; font-size: .9rem; font-weight: 600; cursor: pointer; }
+.btn-add:hover { background: #066570; }
+.btn-add:disabled { opacity: .6; cursor: default; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal-backdrop[hidden] { display: none; }
+.modal-box { background: #fff; border-radius: 8px; width: min(420px, 92vw); max-height: 90vh; overflow-y: auto; padding: 20px; }
+.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.modal-head h2 { margin: 0; font-size: 1.25rem; color: #1f2933; }
+.modal-close { background: none; border: 0; font-size: 1.6rem; cursor: pointer; color: #52606d; }
+.add-form { display: grid; gap: 12px; }
+.add-form label { display: flex; flex-direction: column; font-size: .85rem; font-weight: 600; color: #52606d; gap: 4px; }
+.add-form input, .add-form select { padding: 7px 8px; border: 1px solid #cbd2d9; border-radius: 4px; font-size: .9rem; }
+.add-form .btn-add { justify-self: start; }
+.form-error { color: #b42318; font-size: .85rem; }
+@media (max-width: 768px) {
+    body { padding-left: 0; }
+    .page-head { flex-wrap: wrap; gap: 10px; }
+}
+</style>
+{% endblock %}

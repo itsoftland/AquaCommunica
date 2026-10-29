@@ -15,3 +15,6 @@ def customer_page(request):
 
 def dealer_Page(request):
     return render(request, "Users/dealer.html")
+
+def user_page(request):
+    return render(request, "Users/users.html")

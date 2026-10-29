@@ -15,6 +15,8 @@ urlpatterns = [
     #user urls
     path('user/<int:pk>/hard-delete/', users.PermanentUserDelete.as_view(), name="user_hard_delete"),
     path('user/<int:pk>/soft-delete/', users.SoftDeleteUser.as_view(), name="user_soft_delete"),
+    path('user/<int:pk>/restore/', users.RestoreUser.as_view(), name="user_restore"),
+    path('user/<int:pk>/set-password/', users.AdminChangeUserPassword.as_view(), name="user_set_password"),
     path('user/change-password/', users.ChangePassword.as_view(), name="change_password"),
     path('list-users/', users.ListUsers.as_view(), name="users_list"),
 

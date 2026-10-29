@@ -66,6 +66,33 @@ class ChangePasswordSerializer(serializers.Serializer):
         return user
 
 
+class AdminSetPasswordSerializer(serializers.Serializer):
+    """Set another user's password; the caller's rights are checked in the view."""
+
+    new_password = serializers.CharField(
+        required=True,
+        write_only=True,
+        min_length=6,
+    )
+
+    confirm_password = serializers.CharField(
+        required=True,
+        write_only=True
+    )
+
+    def validate(self, attrs):
+
+        if attrs['new_password'] != attrs['confirm_password']:
+
+            raise serializers.ValidationError(
+                {
+                    "confirm_password": "New Password : Confirm Password not matching"
+                }
+            )
+
+        return attrs
+
+
 class CustomUserListSerializer(serializers.ModelSerializer):
 
     role_display = serializers.CharField(
@@ -85,6 +112,12 @@ class CustomUserListSerializer(serializers.ModelSerializer):
         default=None
     )
 
+    client_type = serializers.CharField(
+        source='user_profile.client_type',
+        read_only=True,
+        default=None
+    )
+
     class Meta:
         model = CustomUser
         fields = [
@@ -96,6 +129,7 @@ class CustomUserListSerializer(serializers.ModelSerializer):
             'role_display',
             'dealer',
             'dealer_email',
+            'client_type',
             'user_admin',
             'created_by',
             'created_by_email',
