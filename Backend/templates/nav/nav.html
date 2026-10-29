@@ -3,6 +3,7 @@
     <ul>
         <li><a href="{% url 'dashboard' %}">Dashboard</a></li>
         <li id="customer-link" hidden><a href="{% url 'customer_page' %}">Customer</a></li>
+        <li id="dealer-link" hidden><a href="{% url 'dealer_page' %}">Dealer</a></li>
         <li id="audit-log-link" hidden><a href="{% url 'audit_log_page' %}">Audit Log</a></li>
     </ul>
     <div class="sidebar-bottom">
@@ -54,6 +55,7 @@ try {
         document.getElementById("customer-link").hidden = false;
     }
     if (user.role === "superadmin") {
+        document.getElementById("dealer-link").hidden = false;
         document.getElementById("audit-log-link").hidden = false;
     }
 } catch (_) {}

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Dealer | AquaCommunica{% endblock %}
+
+{% block content %}
+<style id="auth-guard-style">body { visibility: hidden; }</style>
+<script>
+(async () => {
+    const toLogin = () => {
+        ["access_token", "refresh_token", "user"].forEach(k => localStorage.removeItem(k));
+        window.location.replace("{% url 'login_page' %}");
+    };
+    const profile = (token) => fetch("{% url 'user_profile' %}", {
+        headers: { "Authorization": "Bearer " + token },
+    });
+
+    const access  = localStorage.getItem("access_token");
+    const refresh = localStorage.getItem("refresh_token");
+    if (!access || !refresh) return toLogin();
+
+    try {
+        let res = await profile(access);
+        if (res.status === 401) {
+            const r = await fetch("{% url 'token_refresh' %}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh }),
+            });
+            const body = await r.json().catch(() => ({}));
+            const newAccess = body.access || (body.data && body.data.access);
+            if (!r.ok || !newAccess) return toLogin();
+            localStorage.setItem("access_token", newAccess);
+            res = await profile(newAccess);
+        }
+        if (!res.ok) return toLogin();
+        const body = await res.json();
+        // only super admins may view this page
+        if (body.data.user.role !== "superadmin") {
+            return window.location.replace("{% url 'dashboard' %}");
+        }
+    } catch (_) {
+        return toLogin();
+    }
+    document.getElementById("auth-guard-style").remove();
+    loadDealers();
+})();
+
+async function loadDealers() {
+    const body = document.getElementById("dealer-body");
+    const cols = 9;
+    const message = (text) => {
+        body.innerHTML = "";
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = cols;
+        td.textContent = text;
+        tr.appendChild(td);
+        body.appendChild(tr);
+    };
+
+    let res, json;
+    try {
+        res = await fetch("{% url 'get_dealer_profile_list' %}", {
+            headers: { "Authorization": "Bearer " + localStorage.getItem("access_token") },
+        });
+        json = await res.json().catch(() => ({}));
+    } catch (_) {
+        return message("Network error. Please try again.");
+    }
+    if (!res.ok) return message(json.message || "Unable to load dealers.");
+
+    const rows = json.data || [];
+    if (!rows.length) return message("No dealers yet.");
+
+    body.innerHTML = "";
+    for (const p of rows) {
+        const tr = document.createElement("tr");
+        [
+            p.profile_id,
+            [p.first_name, p.last_name].filter(Boolean).join(" "),
+            p.user_email,
+            p.city,
+            p.total_device_count,
+            p.validity_from_date,
+            p.validity_to_date,
+            p.authentication_status,
+            p.is_profile_active ? "Active" : "Inactive",
+        ].forEach(v => {
+            const td = document.createElement("td");
+            td.textContent = (v === null || v === undefined || v === "") ? "-" : v;
+            tr.appendChild(td);
+        });
+        const statusCell = tr.lastElementChild;
+        const badge = document.createElement("span");
+        badge.className = "badge " + (p.is_profile_active ? "badge-green" : "badge-red");
+        badge.textContent = statusCell.textContent;
+        statusCell.textContent = "";
+        statusCell.appendChild(badge);
+        body.appendChild(tr);
+    }
+}
+</script>
+
+{% include "nav/nav.html" %}
+<div class="customer-page">
+    <div class="page-head">
+        <h1>Dealers</h1>
+    </div>
+    <div class="customer-table-wrap">
+        <table class="customer-table">
+            <thead>
+                <tr>
+                    <th>Profile ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>City</th>
+                    <th>Devices</th>
+                    <th>Valid From</th>
+                    <th>Valid Till</th>
+                    <th>Authentication</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="dealer-body"><tr><td colspan="9">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+<style>
+.customer-page { max-width: 100%; }
+.customer-page h1 { margin: 0; font-size: 1.6rem; color: #1f2933; }
+.page-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.customer-table-wrap { width: 100%; overflow-x: auto; background: #fff; border: 1px solid #e3e8ef; border-radius: 8px; scrollbar-width: thin; scrollbar-color: #b8c2cc transparent; }
+.customer-table-wrap::-webkit-scrollbar { height: 6px; }
+.customer-table-wrap::-webkit-scrollbar-thumb { background: #b8c2cc; border-radius: 3px; }
+.customer-table-wrap::-webkit-scrollbar-track { background: transparent; }
+.customer-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+.customer-table th { text-align: left; background: #087f8c; color: #fff; padding: 10px 12px; white-space: nowrap; font-weight: 600; }
+.customer-table td { padding: 10px 12px; border-bottom: 1px solid #eef1f5; vertical-align: top; color: #1f2933; white-space: nowrap; }
+.customer-table tbody tr:hover { background: #f6f9fb; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: .75rem; font-weight: 600; text-transform: uppercase; background: #eef1f5; color: #52606d; }
+.badge-green { background: #e6f6ec; color: #1a7f45; }
+.badge-red { background: #fdecec; color: #b42318; }
+@media (max-width: 768px) {
+    body { padding-left: 0; }
+    .sidebar { position: static; width: auto; }
+}
+</style>
+{% endblock %}
