@@ -6,8 +6,9 @@ from rest_framework import status
 
 from ...permissions import CanDeleteUser
 from ...services.get_usr_profile import get_user
+from ...services.users import user_list
 from ...models.customuser import CustomUser
-from ...serializers.users import ChangePasswordSerializer
+from ...serializers.users import ChangePasswordSerializer, CustomUserListSerializer
 from ...utlis.responses import error_response, success_response
 from ...utlis.audit import record_audit
 from ...models.audit import AuditLog
@@ -157,3 +158,26 @@ class ChangePassword(APIView):
             message="Password changed sucessfully",
             status=status.HTTP_200_OK,
         )
+
+
+class ListUsers(APIView):
+
+    permission_classes = [IsAuthenticated, ]
+
+    def get(self, request):
+
+        user = request.user
+
+        users = user_list(user).select_related('dealer', 'created_by')
+
+        serializer = CustomUserListSerializer(
+            users,
+            many=True
+        )
+
+        return success_response(
+            message="Users fetched successfully",
+            data=serializer.data,
+            status=status.HTTP_200_OK,
+        )
+

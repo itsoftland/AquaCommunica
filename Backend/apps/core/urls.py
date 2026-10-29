@@ -16,6 +16,7 @@ urlpatterns = [
     path('user/<int:pk>/hard-delete/', users.PermanentUserDelete.as_view(), name="user_hard_delete"),
     path('user/<int:pk>/soft-delete/', users.SoftDeleteUser.as_view(), name="user_soft_delete"),
     path('user/change-password/', users.ChangePassword.as_view(), name="change_password"),
+    path('list-users/', users.ListUsers.as_view(), name="users_list"),
 
     #user profile urls
     path('userprofile/<int:pk>/update/', profile.UpdateUserProfile.as_view(), name="update_user_profile"),
@@ -29,5 +30,5 @@ urlpatterns = [
     path('dealerprofile/<int:pk>/update/', profile.UpdateDealerProfile.as_view(), name="update_dealer_profile"),
     path('get-dealer-profile-list/', profile.ListDealerProfiles.as_view(), name="get_dealer_profile_list"),
     path('dealer-profile-details/<int:pk>/', profile.DealerProfileDetails.as_view(), name="dealer_profile_details"),
-    
+
 ]

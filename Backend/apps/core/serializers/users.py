@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from rest_framework import status
 
+from ..models.customuser import CustomUser
 from ..utlis.responses import error_response
 
 
@@ -63,4 +64,44 @@ class ChangePasswordSerializer(serializers.Serializer):
         user.save(update_fields=["password"])
 
         return user
-    
+
+
+class CustomUserListSerializer(serializers.ModelSerializer):
+
+    role_display = serializers.CharField(
+        source='get_role_display',
+        read_only=True
+    )
+
+    dealer_email = serializers.EmailField(
+        source='dealer.email',
+        read_only=True,
+        default=None
+    )
+
+    created_by_email = serializers.EmailField(
+        source='created_by.email',
+        read_only=True,
+        default=None
+    )
+
+    class Meta:
+        model = CustomUser
+        fields = [
+            'id',
+            'email',
+            'first_name',
+            'last_name',
+            'role',
+            'role_display',
+            'dealer',
+            'dealer_email',
+            'user_admin',
+            'created_by',
+            'created_by_email',
+            'is_active',
+            'is_verified',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = fields
