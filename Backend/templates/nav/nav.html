@@ -158,6 +158,8 @@ try {
     }
     if (user.role === "superadmin" || user.role === "dealer") {
         document.getElementById("customer-link").hidden = false;
+    }
+    if (["superadmin", "user_admin", "executive", "dealer"].includes(user.role)) {
         document.getElementById("user-link").hidden = false;
         document.getElementById("manage-label").hidden = false;
     }
