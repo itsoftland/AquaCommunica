@@ -56,6 +56,24 @@ def buid_license_registration_payload(profile):
 
 
 
+def _license_server_reason(data, default):
+    """Pull the human-readable reason out of a license server response."""
+    if not isinstance(data, dict):
+        return str(data) if data else default
+
+    lowered = {str(k).lower(): v for k, v in data.items()}
+    for key in ('message', 'msg', 'error', 'errors', 'reason', 'detail', 'description', 'status'):
+        value = lowered.get(key)
+        if value:
+            if isinstance(value, (list, tuple)):
+                value = '; '.join(str(v) for v in value)
+            elif isinstance(value, dict):
+                value = '; '.join(f"{k}: {v}" for k, v in value.items())
+            return str(value)
+
+    return f"{default}: {data}"
+
+
 def register_with_license_server(profile):
     """Register a user profile with the external license server.
 
@@ -126,7 +144,7 @@ def register_with_license_server(profile):
                 'success': False,
                 'error': (
                     f"Registration failed: "
-                    f"{data.get('message', 'Invalid response from license server')}"
+                    f"{_license_server_reason(data, 'Invalid response from license server')}"
                 )
             }
 

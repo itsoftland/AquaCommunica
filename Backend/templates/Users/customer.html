@@ -391,7 +391,11 @@ async function validateThenSync(id, btn) {
     }
 }
 
-async function loadCustomers() {
+const LIST_URL = "{% url 'get_user_profile_list' %}";
+let currentUrl = LIST_URL;
+let prevUrl = null, nextUrl = null, pageSize = 0;
+
+async function loadCustomers(url = currentUrl) {
     const body = document.getElementById("customer-body");
     const cols = 11;
     const message = (text) => {
@@ -404,13 +408,29 @@ async function loadCustomers() {
         body.appendChild(tr);
     };
 
-    const res = await fetch("{% url 'get_user_profile_list' %}", {
-        headers: { "Authorization": "Bearer " + localStorage.getItem("access_token") },
-    });
-    const json = await res.json().catch(() => ({}));
+    let res, json;
+    try {
+        res = await fetch(url, {
+            headers: { "Authorization": "Bearer " + localStorage.getItem("access_token") },
+        });
+        json = await res.json().catch(() => ({}));
+    } catch (_) {
+        return message("Network error. Please try again.");
+    }
     if (!res.ok) return message(json.message || "Unable to load customers.");
 
-    const rows = json.data || [];
+    const rows = (json.data && json.data.results) || [];
+    currentUrl = url;
+    prevUrl = json.data.previous;
+    nextUrl = json.data.next;
+    const page = Number(new URL(url, location.href).searchParams.get("page")) || 1;
+    const sizeParam = Number(new URL(url, location.href).searchParams.get("page_size"));
+    if (sizeParam) pageSize = sizeParam;
+    else if (page === 1) pageSize = rows.length || pageSize;
+    const pages = Math.max(1, Math.ceil(json.data.count / (pageSize || 1)));
+    document.getElementById("pager-info").textContent = page + " / " + pages;
+    document.getElementById("pager-prev").disabled = !prevUrl;
+    document.getElementById("pager-next").disabled = !nextUrl;
     if (!rows.length) return message("No customers yet.");
 
     body.innerHTML = "";
@@ -498,6 +518,11 @@ async function loadCustomers() {
             <tbody id="customer-body"><tr><td colspan="11">Loading...</td></tr></tbody>
         </table>
     </div>
+    <div class="pager">
+        <button type="button" id="pager-prev" class="icon-btn" onclick="loadCustomers(prevUrl)" title="Previous" aria-label="Previous page" disabled><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <span id="pager-info"></span>
+        <button type="button" id="pager-next" class="icon-btn" onclick="loadCustomers(nextUrl)" title="Next" aria-label="Next page" disabled><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+    </div>
 </div>
 <div id="add-modal" class="modal-overlay" hidden onclick="if (event.target === this) closeAddModal()">
     <div class="modal edit-modal-box">
@@ -581,6 +606,8 @@ async function loadCustomers() {
 .icon-btn { border: none; background: none; color: #087f8c; padding: 4px; border-radius: 6px; cursor: pointer; line-height: 0; vertical-align: middle; }
 .icon-btn + .icon-btn { margin-left: 6px; }
 .icon-btn:hover { background: #e6f4f5; }
+.icon-btn:disabled { color: #b8c2cc; cursor: default; background: none; }
+.pager { display: flex; justify-content: center; align-items: center; color: #52606d; font-size: .9rem; gap: 12px; margin-top: 12px; }
 .action-btn + .action-btn { margin-left: 6px; }
 .action-btn:hover:not(:disabled) { background: #087f8c; color: #fff; }
 .action-btn:disabled { border-color: #d0d6dd; color: #a0a8b1; cursor: not-allowed; }
