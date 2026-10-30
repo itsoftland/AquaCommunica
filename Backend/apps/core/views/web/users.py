@@ -16,6 +16,7 @@ from ...serializers.users import (
 from ...utlis.responses import error_response, success_response
 from ...utlis.audit import record_audit
 from ...models.audit import AuditLog
+from ...pagination import CustomPagination
 
 
 action_log = logging.getLogger('aquacommunica.action.log')
@@ -283,16 +284,35 @@ class ListUsers(APIView):
 
         user = request.user
 
-        users = user_list(user).select_related('dealer', 'created_by', 'user_profile')
+        users_list = user_list(user).select_related('dealer', 'created_by', 'user_profile')
+
+        paginator = CustomPagination()
+
+        paginated_users = paginator.paginate_queryset(
+            users_list,
+            request,
+            view=self
+        )
 
         serializer = CustomUserListSerializer(
-            users,
+            paginated_users,
             many=True
+        )
+
+        action_log.info(
+            f"Users listed: requested_by={user.id}, "
+            f"count={len(paginated_users)}, "
+            f"page={request.query_params.get('page', 1)}"
         )
 
         return success_response(
             message="Users fetched successfully",
-            data=serializer.data,
+            data={
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "results": serializer.data,
+            },
             status=status.HTTP_200_OK,
         )
 

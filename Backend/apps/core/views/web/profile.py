@@ -12,7 +12,12 @@ from ...utlis.responses import error_response, success_response
 from ...utlis.audit import record_audit
 from ...models.audit import AuditLog
 from ...permissions import CanManageUserProfiles, IsSuperAdmin
-from ...serializers.profile import UserProfileUpdateSerializer, DealerProfileUpdateSerializer, UserProfileDisplaySerializer, DealerProfileDisplaySerializer
+from ...serializers.profile import (
+    UserProfileUpdateSerializer, 
+    DealerProfileUpdateSerializer, 
+    UserProfileDisplaySerializer, 
+    DealerProfileDisplaySerializer
+)
 from ...pagination import CustomPagination
 
 
