@@ -13,6 +13,7 @@ from ...utlis.audit import record_audit
 from ...models.audit import AuditLog
 from ...permissions import CanManageUserProfiles, IsSuperAdmin
 from ...serializers.profile import UserProfileUpdateSerializer, DealerProfileUpdateSerializer, UserProfileDisplaySerializer, DealerProfileDisplaySerializer
+from ...pagination import CustomPagination
 
 
 action_log = logging.getLogger('aquacommunica.action.log')
@@ -168,8 +169,16 @@ class ListUserProfiles(APIView):
 
         user_created_profiles = get_user_profiles_list(user)
 
-        serializer = UserProfileDisplaySerializer(
+        paginator = CustomPagination()
+
+        paginated_profiles = paginator.paginate_queryset(
             user_created_profiles,
+            request,
+            view=self
+        )
+
+        serializer = UserProfileDisplaySerializer(
+            paginated_profiles,
             many=True
         )
 
@@ -180,7 +189,12 @@ class ListUserProfiles(APIView):
 
         return success_response(
             message="User profiles fetched successfully.",
-            data=serializer.data,
+            data={
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "results": serializer.data,
+            },
             status=status.HTTP_200_OK,
         )
 
@@ -243,8 +257,16 @@ class ListDealerProfiles(APIView):
 
         user_created_profiles = get_dealer_profiles_list(user)
 
-        serializer = DealerProfileDisplaySerializer(
+        paginator = CustomPagination()
+
+        paginated_profiles = paginator.paginate_queryset(
             user_created_profiles,
+            request,
+            view=self
+        )
+
+        serializer = DealerProfileDisplaySerializer(
+            paginated_profiles,
             many=True
         )
 
@@ -255,7 +277,12 @@ class ListDealerProfiles(APIView):
 
         return success_response(
             message="Dealer profiles fetched successfully.",
-            data=serializer.data,
+            data={
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "results": serializer.data,
+            },
             status=status.HTTP_200_OK,
         )
 

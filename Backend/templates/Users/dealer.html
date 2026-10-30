@@ -48,7 +48,11 @@ const SVG_ATTRS = 'width="18" height="18" viewBox="0 0 24 24" fill="none" stroke
 const ICON_VIEW = `<svg ${SVG_ATTRS}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const ICON_EDIT = `<svg ${SVG_ATTRS}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>`;
 
-async function loadDealers() {
+const LIST_URL = "{% url 'get_dealer_profile_list' %}";
+let currentUrl = LIST_URL;
+let prevUrl = null, nextUrl = null, pageSize = 0;
+
+async function loadDealers(url = currentUrl) {
     const body = document.getElementById("dealer-body");
     const cols = 10;
     const message = (text) => {
@@ -63,7 +67,7 @@ async function loadDealers() {
 
     let res, json;
     try {
-        res = await fetch("{% url 'get_dealer_profile_list' %}", {
+        res = await fetch(url, {
             headers: { "Authorization": "Bearer " + localStorage.getItem("access_token") },
         });
         json = await res.json().catch(() => ({}));
@@ -72,7 +76,19 @@ async function loadDealers() {
     }
     if (!res.ok) return message(json.message || "Unable to load dealers.");
 
-    const rows = json.data || [];
+    const rows = (json.data && json.data.results) || [];
+    currentUrl = url;
+    prevUrl = json.data.previous;
+    nextUrl = json.data.next;
+    const page = Number(new URL(url, location.href).searchParams.get("page")) || 1;
+    // the backend decides the page size; the first page is always full when more pages exist
+    const sizeParam = Number(new URL(url, location.href).searchParams.get("page_size"));
+    if (sizeParam) pageSize = sizeParam;
+    else if (page === 1) pageSize = rows.length || pageSize;
+    const pages = Math.max(1, Math.ceil(json.data.count / (pageSize || 1)));
+    document.getElementById("pager-info").textContent = page + " / " + pages;
+    document.getElementById("pager-prev").disabled = !prevUrl;
+    document.getElementById("pager-next").disabled = !nextUrl;
     if (!rows.length) return message("No dealers yet.");
 
     body.innerHTML = "";
@@ -299,6 +315,11 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMod
             <tbody id="dealer-body"><tr><td colspan="10">Loading...</td></tr></tbody>
         </table>
     </div>
+    <div class="pager">
+        <button type="button" id="pager-prev" class="icon-btn" onclick="loadDealers(prevUrl)" title="Previous" aria-label="Previous page" disabled><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <span id="pager-info"></span>
+        <button type="button" id="pager-next" class="icon-btn" onclick="loadDealers(nextUrl)" title="Next" aria-label="Next page" disabled><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+    </div>
 </div>
 <div id="dealer-modal" class="modal-backdrop" hidden onclick="if (event.target === this) closeModal()">
     <div class="modal-box">
@@ -327,9 +348,11 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMod
 <style>
 .btn-create { background: #087f8c; padding: 8px 16px; font-size: .9rem; }
 .create-form { grid-template-columns: 1fr; }
+.pager { display: flex; justify-content: center; align-items: center; color: #52606d; font-size: .9rem; gap: 12px; margin-top: 12px; }
 .icon-btn { border: none; background: none; color: #087f8c; padding: 4px; border-radius: 6px; cursor: pointer; line-height: 0; vertical-align: middle; }
 .icon-btn + .icon-btn { margin-left: 6px; }
 .icon-btn:hover { background: #e6f4f5; }
+.icon-btn:disabled { color: #b8c2cc; cursor: default; background: none; }
 .btn-action { border: 0; border-radius: 4px; padding: 4px 10px; font-size: .8rem; font-weight: 600; color: #fff; cursor: pointer; }
 .btn-edit { background: #1a7f45; }
 .btn-action:disabled { opacity: .6; cursor: default; }
@@ -350,12 +373,12 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMod
 .customer-page { max-width: 100%; }
 .customer-page h1 { margin: 0; font-size: 1.6rem; color: #1f2933; }
 .page-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.customer-table-wrap { width: 100%; overflow-x: auto; background: #fff; border: 1px solid #e3e8ef; border-radius: 8px; scrollbar-width: thin; scrollbar-color: #b8c2cc transparent; }
+.customer-table-wrap { width: 100%; overflow: auto; max-height: calc(100vh - 210px); background: #fff; border: 1px solid #e3e8ef; border-radius: 8px; scrollbar-width: thin; scrollbar-color: #b8c2cc transparent; }
 .customer-table-wrap::-webkit-scrollbar { height: 6px; }
 .customer-table-wrap::-webkit-scrollbar-thumb { background: #b8c2cc; border-radius: 3px; }
 .customer-table-wrap::-webkit-scrollbar-track { background: transparent; }
 .customer-table { width: 100%; border-collapse: collapse; table-layout: auto; }
-.customer-table th { text-align: left; background: #087f8c; color: #fff; padding: 10px 12px; white-space: nowrap; font-weight: 600; }
+.customer-table th { position: sticky; top: 0; z-index: 1; text-align: left; background: #087f8c; color: #fff; padding: 10px 12px; white-space: nowrap; font-weight: 600; }
 .customer-table td { padding: 10px 12px; border-bottom: 1px solid #eef1f5; vertical-align: top; color: #1f2933; white-space: nowrap; }
 .customer-table tbody tr:hover { background: #f6f9fb; }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: .75rem; font-weight: 600; text-transform: uppercase; background: #eef1f5; color: #52606d; }
