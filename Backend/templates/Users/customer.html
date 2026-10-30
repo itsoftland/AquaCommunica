@@ -459,7 +459,7 @@ async function loadCustomers(url = currentUrl) {
         statusCell.appendChild(badge);
         const actionTd = document.createElement("td");
         const btn = document.createElement("button");
-        btn.className = "action-btn";
+        btn.className = "action-btn license-btn";
         if (p.authentication_status === "Approved") {
             btn.textContent = "Sync License";
             btn.onclick = () => openSyncModal(p.id, btn);
@@ -609,6 +609,7 @@ async function loadCustomers(url = currentUrl) {
 .icon-btn:disabled { color: #b8c2cc; cursor: default; background: none; }
 .pager { display: flex; justify-content: center; align-items: center; color: #52606d; font-size: .9rem; gap: 12px; margin-top: 12px; }
 .action-btn + .action-btn { margin-left: 6px; }
+.action-btn.license-btn { width: 140px; text-align: center; }
 .action-btn:hover:not(:disabled) { background: #087f8c; color: #fff; }
 .action-btn:disabled { border-color: #d0d6dd; color: #a0a8b1; cursor: not-allowed; }
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }

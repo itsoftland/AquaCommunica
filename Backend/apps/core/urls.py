@@ -11,6 +11,7 @@ urlpatterns = [
     path('user-profile/', auth.ProfileView.as_view(), name="user_profile"),
     path('create-user/', auth.UserRegisterView.as_view(), name="user_registration"),
     path('logout/', auth.LogoutView.as_view(), name="logout"),
+    path('dashboard/', auth.DashboardView.as_view(), name="dashboard_stats"),
 
     #user urls
     path('user/<int:pk>/hard-delete/', users.PermanentUserDelete.as_view(), name="user_hard_delete"),

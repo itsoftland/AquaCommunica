@@ -47,32 +47,14 @@
         <div>
             <p class="dash-eyebrow" id="dash-date"></p>
             <h1 id="dash-greeting">Welcome</h1>
-            <p class="dash-sub">Manage your customers, dealers and licenses from one place.</p>
+            <p class="dash-sub">Your overview of customers, dealers and licenses, with live counts for each.</p>
         </div>
         <span class="dash-role" id="dash-role" hidden></span>
     </section>
 
-    <h2 class="dash-section">Quick access</h2>
-    <div class="dash-cards">
-        <a class="dash-card" id="card-customer" href="{% url 'customer_page' %}" hidden>
-            <span class="dash-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-            <h3>Customers</h3>
-            <p>Add customers, edit profiles and manage license sync.</p>
-            <span class="dash-go">Open &rarr;</span>
-        </a>
-        <a class="dash-card" id="card-dealer" href="{% url 'dealer_page' %}" hidden>
-            <span class="dash-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11h16V9"/><path d="M9 20v-6h6v6"/></svg></span>
-            <h3>Dealers</h3>
-            <p>Create dealer accounts and review their profiles.</p>
-            <span class="dash-go">Open &rarr;</span>
-        </a>
-        <a class="dash-card" id="card-audit" href="{% url 'audit_log_page' %}" hidden>
-            <span class="dash-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span>
-            <h3>Audit Log</h3>
-            <p>Track who did what, and when, across the system.</p>
-            <span class="dash-go">Open &rarr;</span>
-        </a>
-    </div>
+    <div id="dash-stats"></div>
+    <p class="dash-empty" id="dash-empty" hidden>No statistics are available for your account yet.</p>
+    <p class="dash-empty" id="dash-error" hidden>Could not load dashboard statistics. Please refresh the page.</p>
 </div>
 
 <style>
@@ -93,25 +75,21 @@
     letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
     background: rgba(255,255,255,.2); border: 1px solid rgba(255,255,255,.35);
 }
-.dash-section { margin: 32px 0 14px; font-size: 1.05rem; color: #52606d; text-transform: uppercase; letter-spacing: .08em; }
-.dash-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; }
-.dash-card {
     display: block; padding: 24px; background: #fff; border-radius: 14px; text-decoration: none; color: #1f2933;
     border: 1px solid #e3e8ef; box-shadow: 0 1px 3px rgba(16,24,40,.06);
     transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
     animation: dash-in .5s ease both;
 }
-.dash-card[hidden] { display: none; }
-.dash-card:hover { transform: translateY(-4px); border-color: #087f8c; box-shadow: 0 12px 28px rgba(8,127,140,.18); }
-.dash-icon {
-    display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px;
-    border-radius: 14px; margin-bottom: 14px; color: #087f8c; background: #e6f4f5;
-    transition: background .2s ease, color .2s ease;
+.dash-panel { margin-top: 24px; animation: dash-in .5s ease both; }
+.dash-panel h2 { margin: 0 0 12px; font-size: 1.05rem; color: #52606d; text-transform: uppercase; letter-spacing: .08em; }
+.dash-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
+.dash-tile {
+    padding: 20px; background: #fff; border-radius: 14px; border: 1px solid #e3e8ef;
+    border-left: 4px solid var(--c, #087f8c); box-shadow: 0 1px 3px rgba(16,24,40,.06);
 }
-.dash-card:hover .dash-icon { background: #087f8c; color: #fff; }
-.dash-card h3 { margin: 0 0 6px; font-size: 1.15rem; }
-.dash-card p { margin: 0 0 16px; color: #52606d; font-size: .92rem; line-height: 1.5; }
-.dash-go { color: #087f8c; font-weight: 600; font-size: .9rem; }
+.dash-tile .num { font-size: 2rem; font-weight: 700; color: #1f2933; line-height: 1.1; }
+.dash-tile .lbl { margin-top: 6px; color: #52606d; font-size: .85rem; text-transform: capitalize; }
+.dash-empty { margin-top: 32px; text-align: center; color: #52606d; }
 @keyframes dash-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @media (max-width: 768px) {
     .dash-hero { flex-direction: column; padding: 24px; }
@@ -132,12 +110,62 @@ try {
         r.textContent = user.role;
         r.hidden = false;
     }
-    if (user.role === "superadmin" || user.role === "dealer") document.getElementById("card-customer").hidden = false;
-    if (user.role === "superadmin") {
-        document.getElementById("card-dealer").hidden = false;
-        document.getElementById("card-audit").hidden = false;
-    }
-    document.querySelectorAll(".dash-card").forEach((c, i) => c.style.animationDelay = (0.1 + i * 0.08) + "s");
 } catch (_) {}
+
+(async () => {
+    const TITLES = { users: "Users", customers: "Customers", dealers: "Dealers" };
+    const COLORS = { total: "#087f8c", active: "#2e9e5b", validated: "#2e9e5b", inactive: "#9aa5b1",
+                     invalidated: "#e0a100", expired: "#d64545", parents: "#3b7dd8", children: "#8e5bd6" };
+    const get = (token) => fetch("{% url 'dashboard_stats' %}", { headers: { "Authorization": "Bearer " + token } });
+    const show = (id) => { document.getElementById(id).hidden = false; };
+
+    try {
+        let res = await get(localStorage.getItem("access_token") || "");
+        if (res.status === 401) {
+            const r = await fetch("{% url 'token_refresh' %}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh: localStorage.getItem("refresh_token") }),
+            });
+            const b = await r.json().catch(() => ({}));
+            const t = b.access || (b.data && b.data.access);
+            if (!r.ok || !t) return;   // the auth guard above redirects to login
+            localStorage.setItem("access_token", t);
+            res = await get(t);
+        }
+        if (!res.ok) return show("dash-error");
+        const data = ((await res.json()).data) || {};
+        const groups = Object.keys(data);
+        if (!groups.length) return show("dash-empty");
+
+        const root = document.getElementById("dash-stats");
+        groups.forEach((g, i) => {
+            const panel = document.createElement("section");
+            panel.className = "dash-panel";
+            panel.style.animationDelay = (0.1 + i * 0.1) + "s";
+            const h = document.createElement("h2");
+            h.textContent = TITLES[g] || g;
+            const tiles = document.createElement("div");
+            tiles.className = "dash-tiles";
+            Object.entries(data[g]).forEach(([k, v]) => {
+                const t = document.createElement("div");
+                t.className = "dash-tile";
+                t.style.setProperty("--c", COLORS[k] || "#087f8c");
+                const n = document.createElement("div");
+                n.className = "num";
+                n.textContent = v;
+                const l = document.createElement("div");
+                l.className = "lbl";
+                l.textContent = k;
+                t.append(n, l);
+                tiles.appendChild(t);
+            });
+            panel.append(h, tiles);
+            root.appendChild(panel);
+        });
+    } catch (_) {
+        show("dash-error");
+    }
+})();
 </script>
 {% endblock %}
