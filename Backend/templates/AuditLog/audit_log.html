@@ -139,6 +139,19 @@ async function loadLogs(page) {
 .audit-pager button { border: 1px solid #087f8c; background: #fff; color: #087f8c; padding: 6px 14px; border-radius: 6px; cursor: pointer; }
 .audit-pager button:hover:not(:disabled) { background: #087f8c; color: #fff; }
 .audit-pager button:disabled { border-color: #d0d6dd; color: #a0a8b1; cursor: not-allowed; }
+/* ---- colourful theme ---- */
+.audit-page h1 { margin: 0 0 16px; padding: 14px 18px; font-size: 1.8rem; font-weight: 800; background: linear-gradient(135deg, #e0f7fa, #ede9fe); border-radius: 12px; border: 1px solid #d6e4f0; box-shadow: 0 2px 8px rgba(8,127,140,.10); color: #3b3b9c; }
+.audit-table-wrap { border: 0; border-radius: 12px; box-shadow: 0 4px 18px rgba(31,41,51,.08); }
+.audit-table th { background: linear-gradient(90deg, #087f8c, #5b5bd6); letter-spacing: .02em; }
+.audit-table tbody tr:nth-child(even) { background: #f4faff; }
+.audit-table tbody tr:hover { background: #e3f4f7; }
+.audit-table td { border-bottom: 1px solid #e6eef5; }
+.audit-table td:first-child { color: #5b5bd6; font-weight: 600; }
+.badge { border-radius: 999px; padding: 3px 10px; background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #047857; }
+.badge-red { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #b91c1c; }
+.audit-pager { background: #fff; width: fit-content; margin: 14px auto 0; padding: 6px 14px; border-radius: 999px; box-shadow: 0 2px 8px rgba(31,41,51,.08); font-weight: 600; color: #5b5bd6; }
+.audit-pager button { border-radius: 999px; border-color: #5b5bd6; color: #5b5bd6; font-weight: 600; transition: all .15s; }
+.audit-pager button:hover:not(:disabled) { background: linear-gradient(135deg, #0ea5a4, #5b5bd6); border-color: transparent; color: #fff; }
 @media (max-width: 768px) {
     body { padding-left: 0; }
     .audit-page h1 { font-size: 1.3rem; }
