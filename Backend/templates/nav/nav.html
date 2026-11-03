@@ -13,6 +13,8 @@
         <li id="dealer-link" hidden><a href="{% url 'dealer_page' %}"><svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11h16V9"/><path d="M9 20v-6h6v6"/></svg><span>Dealer</span></a></li>
         <li class="nav-label" id="system-label" hidden>System</li>
         <li id="audit-log-link" hidden><a href="{% url 'audit_log_page' %}"><svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg><span>Audit Log</span></a></li>
+        <li class="nav-label">Account</li>
+        <li><a href="#" id="change-password-link"><svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Change Password</span></a></li>
     </ul>
     <div class="sidebar-bottom">
         <div class="user-info" style="display: flex; align-items: center; gap: 8px; padding-left: 12px;">
@@ -26,12 +28,36 @@
     </div>
 </nav>
 
+<div class="cp-overlay" id="cp-overlay" hidden>
+    <div class="cp-modal" role="dialog" aria-modal="true" aria-labelledby="cp-title">
+        <h3 id="cp-title">Change Password</h3>
+        <form id="cp-form" novalidate>
+            <label for="cp-current">Current password</label>
+            <input type="password" id="cp-current" autocomplete="current-password" required>
+            <label for="cp-new">New password</label>
+            <input type="password" id="cp-new" autocomplete="new-password" minlength="6" required>
+            <label for="cp-confirm">Confirm new password</label>
+            <input type="password" id="cp-confirm" autocomplete="new-password" required>
+            <div class="cp-msg" id="cp-msg" role="alert"></div>
+            <div class="cp-actions">
+                <button type="button" id="cp-cancel">Cancel</button>
+                <button type="submit" id="cp-submit">Update</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <style>
 .sidebar {
     background: linear-gradient(180deg, #087f8c 0%, #05545e 100%);
     box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
 }
 .sidebar .brand {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding-top: 8px;
+    background: #087f8c;
     padding-bottom: 18px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.25);
     letter-spacing: .5px;
@@ -78,6 +104,13 @@
     width: 4px;
     border-radius: 0 4px 4px 0;
     background: #fff;
+}
+.sidebar .sidebar-bottom {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: #05545e;
+    padding-bottom: 8px;
 }
 .nav-icon { flex-shrink: 0; opacity: .9; }
 .nav-toggle, .nav-backdrop { display: none; }
@@ -143,6 +176,18 @@
     opacity: 1;
     transform: translateY(0);
 }
+.cp-overlay { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.5); padding: 16px; }
+.cp-overlay[hidden] { display: none; }
+.cp-modal { background: #fff; color: #222; width: 100%; max-width: 380px; border-radius: 10px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+.cp-modal h3 { margin: 0 0 16px; }
+.cp-modal label { display: block; margin: 12px 0 4px; font-size: .85rem; font-weight: 600; }
+.cp-modal input { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #bbb; border-radius: 6px; font-size: .95rem; }
+.cp-msg { min-height: 1.2em; margin-top: 12px; font-size: .85rem; color: #c0392b; }
+.cp-msg.ok { color: #1e8449; }
+.cp-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.cp-actions button { padding: 9px 16px; border: 0; border-radius: 6px; cursor: pointer; font-size: .9rem; background: #e5e7eb; color: #222; }
+.cp-actions button[type=submit] { background: #087f8c; color: #fff; }
+.cp-actions button:disabled { opacity: .6; cursor: not-allowed; }
 </style>
 
 <script>
@@ -171,7 +216,7 @@ try {
 } catch (_) {}
 
 document.querySelectorAll(".nav-list a").forEach((a) => {
-    if (a.pathname === window.location.pathname) a.classList.add("active");
+    if (a.id !== "change-password-link" && a.pathname === window.location.pathname) a.classList.add("active");
 });
 
 (() => {
@@ -184,6 +229,65 @@ document.querySelectorAll(".nav-list a").forEach((a) => {
     document.getElementById("nav-backdrop").addEventListener("click", () => setOpen(false));
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
     document.querySelectorAll(".nav-list a").forEach((a) => a.addEventListener("click", () => setOpen(false)));
+})();
+
+(() => {
+    const overlay = document.getElementById("cp-overlay");
+    const form = document.getElementById("cp-form");
+    const msg = document.getElementById("cp-msg");
+    const submit = document.getElementById("cp-submit");
+    const show = (text, ok) => { msg.textContent = text; msg.classList.toggle("ok", !!ok); };
+    const close = () => { overlay.hidden = true; form.reset(); show(""); };
+
+    document.getElementById("change-password-link").addEventListener("click", (e) => {
+        e.preventDefault();
+        overlay.hidden = false;
+        document.getElementById("cp-current").focus();
+    });
+    document.getElementById("cp-cancel").addEventListener("click", close);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !overlay.hidden) close(); });
+
+    const flatten = (d) => {
+        if (!d) return "";
+        if (typeof d === "string") return d;
+        if (Array.isArray(d)) return d.map(flatten).join(" ");
+        if (typeof d === "object") return Object.values(d).map(flatten).join(" ");
+        return String(d);
+    };
+
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const current_password = document.getElementById("cp-current").value;
+        const new_password = document.getElementById("cp-new").value;
+        const confirm_password = document.getElementById("cp-confirm").value;
+        if (!current_password || !new_password || !confirm_password) return show("All fields are required.");
+        if (new_password.length < 6) return show("New password must be at least 6 characters.");
+        if (new_password !== confirm_password) return show("New passwords do not match.");
+        submit.disabled = true;
+        show("");
+        try {
+            const res = await fetch("{% url 'change_password' %}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + localStorage.getItem("access_token"),
+                },
+                body: JSON.stringify({ current_password, new_password, confirm_password }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                show(data.message || "Password changed successfully.", true);
+                setTimeout(close, 1200);
+            } else {
+                show(flatten(data.errors || data.message || data.detail || data) || "Could not change password.");
+            }
+        } catch (_) {
+            show("Network error. Please try again.");
+        } finally {
+            submit.disabled = false;
+        }
+    });
 })();
 
 document.getElementById("logout-btn").addEventListener("click", async (e) => {
