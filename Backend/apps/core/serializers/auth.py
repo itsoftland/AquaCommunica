@@ -55,6 +55,32 @@ class LoginSerializer(serializers.Serializer):
                 "Your account is not verified."
             )
 
+        if user.role in (
+            CustomUser.Role.USER_ADMIN,
+            CustomUser.Role.DEALER
+        ):
+            attr = (
+                "user_profile"
+                if user.role == CustomUser.Role.USER_ADMIN
+                else "dealer_profile"
+            )
+            profile = getattr(user, attr, None)
+
+            if profile is None:
+
+                log_auth.info("login failed due to missing profile | email=%s", email)
+                raise PermissionDenied(
+                    "We can't find your profile. Contact admin."
+                )
+
+            if not profile.is_profile_active:
+
+                log_auth.info("login failed due to inactive profile | email=%s", email)
+                raise PermissionDenied(
+                    "Your profile is not active. Contact admin."
+                )
+
+
         # A new session invalidates tokens issued to any other device.
         session_id = user.start_new_session()
 
