@@ -170,7 +170,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
                 log_auth.info("Registration fail - don't have permission to create %s", role)
 
                 raise PermissionDenied(
-                    f"you can't create {role} user"
+                    f"you don't have permission to create {role} user"
                 )
             
         elif user.is_user_admin:

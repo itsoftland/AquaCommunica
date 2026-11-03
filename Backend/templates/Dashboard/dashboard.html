@@ -161,7 +161,11 @@ try {
         }
         if (!res.ok) return show("dash-error");
         const data = ((await res.json()).data) || {};
-        const slots = data.profile;
+        // License/slot tiles are only for user_admin and dealer accounts
+        let role = "";
+        try { role = (JSON.parse(localStorage.getItem("user") || "{}").role || "").toLowerCase(); } catch (_) {}
+        const hasSlots = ["user_admin", "dealer"].includes(role) && data.profile && Object.keys(data.profile).length;
+        const slots = hasSlots ? data.profile : null;
         delete data.profile;
         const groups = Object.keys(data);
         if (!groups.length && !slots) return show("dash-empty");

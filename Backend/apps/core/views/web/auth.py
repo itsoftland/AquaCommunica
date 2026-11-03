@@ -298,6 +298,42 @@ class DashboardView(APIView):
                 created_by=user
             ).count()
 
+            if user.role == DEALER:
+
+                profile = getattr(user, 'dealer_profile', None)
+
+                if profile is None:
+                    return error_response(
+                        message="Dealer profile not found",
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+
+                total_license_unit = profile.total_licence_unit
+                total_users_slot_available = profile.total_user_count
+                total_parent_user_slot_available = profile.parent_user_count
+                total_child_user_slot_available = profile.child_user_count
+                total_device_slot_available = profile.total_device_count
+    
+                total_users_slot_remaning = (total_users_slot_available - 0)
+                total_parent_user_slot_remaning = (total_parent_user_slot_available - 0)
+                total_child_user_slot_remaning = (total_child_user_slot_available - 0)
+                total_device_slot_remaning = (total_device_slot_available - 0)
+                total_license_unit_remaning = (total_license_unit - (total_customers + 0))
+
+                profile_data = {
+                    "total_license_unit": total_license_unit,
+                    "total_users_slot_available": total_users_slot_available,
+                    "parent_user_slot_available": total_parent_user_slot_available,
+                    "child_user_slot_available": total_child_user_slot_available,
+                    "device_slot_available": total_device_slot_available,
+                    "total_license_unit_remaining": total_license_unit_remaning,
+                    "total_users_slot_remaining": total_users_slot_remaning,
+                    "parent_user_slot_remaining": total_parent_user_slot_remaning,
+                    "child_user_slot_remaining": total_child_user_slot_remaning,
+                    "device_slot_remaining": total_device_slot_remaning,
+                }
+            else:
+                profile_data = {}
 
             return success_response(
                 message="Dashboard stats fetched successfully",
@@ -308,6 +344,7 @@ class DashboardView(APIView):
                         "invalidated": total_invalidated_customers,
                         "expired": total_expired_customers,
                     },
+                    "profile": profile_data,
                 },
             )
 
