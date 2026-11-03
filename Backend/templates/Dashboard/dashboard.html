@@ -52,6 +52,7 @@
         <span class="dash-role" id="dash-role" hidden></span>
     </section>
 
+    <div id="dash-slots"></div>
     <div id="dash-stats"></div>
     <p class="dash-empty" id="dash-empty" hidden>No statistics are available for your account yet.</p>
     <p class="dash-empty" id="dash-error" hidden>Could not load dashboard statistics. Please refresh the page.</p>
@@ -75,6 +76,16 @@
     letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
     background: rgba(255,255,255,.2); border: 1px solid rgba(255,255,255,.35);
 }
+#dash-slots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-top: 28px; }
+#dash-slots:empty { display: none; }
+.slot { padding: 14px 16px; background: #fff; border-radius: 12px; border: 1px solid #e3e8ef; box-shadow: 0 1px 3px rgba(16,24,40,.06); animation: dash-in .5s ease both; }
+.slot h3 { margin: 0 0 8px; font-size: .72rem; font-weight: 700; color: #52606d; text-transform: uppercase; letter-spacing: .1em; }
+.slot h3 { display: flex; align-items: center; gap: 8px; }
+.slot .ico { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; border-radius: 8px; color: #087f8c; background: #e6f4f5; }
+.slot .count { font-size: 1.5rem; font-weight: 800; color: #1f2933; line-height: 1; font-variant-numeric: tabular-nums; }
+.slot .count span { color: #9aa5b1; font-weight: 600; }
+.slot .bar { height: 6px; margin-top: 10px; border-radius: 999px; background: #eef1f5; overflow: hidden; }
+.slot .bar i { display: block; height: 100%; width: var(--w, 0%); border-radius: inherit; background: #2e9e5b; transition: width .6s ease; }
 #dash-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 28px; align-items: stretch; }
 .dash-panel {
     display: flex; flex-direction: column;
@@ -95,10 +106,11 @@
 .dash-row .val { font-weight: 700; color: #1f2933; font-variant-numeric: tabular-nums; }
 .dash-empty { margin-top: 32px; text-align: center; color: #52606d; }
 @keyframes dash-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-@media (max-width: 1000px) and (min-width: 769px) { #dash-stats { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 1000px) and (min-width: 769px) { #dash-stats { grid-template-columns: repeat(2, 1fr); } #dash-slots { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 768px) {
     .dash-hero { flex-direction: column; padding: 24px; }
     #dash-stats { grid-template-columns: 1fr; }
+    #dash-slots { grid-template-columns: repeat(2, 1fr); }
     .dash-hero h1 { font-size: 1.5rem; }
 }
 </style>
@@ -122,6 +134,14 @@ try {
     const TITLES = { users: "Users", customers: "Customers", dealers: "Dealers" };
     const COLORS = { total: "#087f8c", active: "#2e9e5b", validated: "#2e9e5b", inactive: "#9aa5b1",
                      invalidated: "#e0a100", expired: "#d64545", parents: "#3b7dd8", children: "#8e5bd6" };
+    const svg = (d) => '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+    const ICONS = {
+        license: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/>'),
+        users: svg('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.5c1.7.8 3 2.7 3 5.5"/>'),
+        parent: svg('<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>'),
+        child: svg('<circle cx="12" cy="9" r="3"/><path d="M6 20c0-3.3 2.7-5 6-5s6 1.7 6 5"/>'),
+        device: svg('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'),
+    };
     const get = (token) => fetch("{% url 'dashboard_stats' %}", { headers: { "Authorization": "Bearer " + token } });
     const show = (id) => { document.getElementById(id).hidden = false; };
 
@@ -141,8 +161,47 @@ try {
         }
         if (!res.ok) return show("dash-error");
         const data = ((await res.json()).data) || {};
+        const slots = data.profile;
+        delete data.profile;
         const groups = Object.keys(data);
-        if (!groups.length) return show("dash-empty");
+        if (!groups.length && !slots) return show("dash-empty");
+
+        if (slots) {
+            // The API returns each license quota with its remaining count
+            const tiles = [
+                { i: "license", t: "License units", total: slots.total_license_unit, left: slots.total_license_unit_remaining },
+                { i: "users", t: "Users", total: slots.total_users_slot_available, left: slots.total_users_slot_remaining },
+                { i: "parent", t: "Parent users", total: slots.parent_user_slot_available, left: slots.parent_user_slot_remaining },
+                { i: "child", t: "Child users", total: slots.child_user_slot_available, left: slots.child_user_slot_remaining },
+                { i: "device", t: "Devices", total: slots.device_slot_available, left: slots.device_slot_remaining },
+            ];
+            const box = document.getElementById("dash-slots");
+            tiles.forEach((x, i) => {
+                const el = document.createElement("div");
+                el.className = "slot";
+                el.style.animationDelay = (0.05 + i * 0.05) + "s";
+                const h = document.createElement("h3");
+                const ico = document.createElement("span");
+                ico.className = "ico";
+                ico.innerHTML = ICONS[x.i];
+                h.append(ico, x.t);
+                const count = document.createElement("div");
+                count.className = "count";
+                const avail = Math.max(x.left, 0);
+                count.textContent = avail;
+                const t = document.createElement("span");
+                t.textContent = "/" + x.total;
+                count.appendChild(t);
+                el.append(h, count);
+                const bar = document.createElement("div");
+                bar.className = "bar";
+                const fill = document.createElement("i");
+                fill.style.setProperty("--w", (x.total ? avail / x.total * 100 : 0) + "%");
+                bar.appendChild(fill);
+                el.appendChild(bar);
+                box.appendChild(el);
+            });
+        }
 
         const root = document.getElementById("dash-stats");
         groups.forEach((g, i) => {
@@ -172,7 +231,7 @@ try {
                 dot.className = "dot";
                 const l = document.createElement("span");
                 l.className = "lbl";
-                l.textContent = k;
+                l.textContent = k.replace(/_/g, " ");
                 const n = document.createElement("span");
                 n.className = "val";
                 n.textContent = v;

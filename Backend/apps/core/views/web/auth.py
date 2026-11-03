@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
-from ...utlis.responses import success_response
+from ...utlis.responses import success_response, error_response
 from ...utlis.audit import record_audit
 from apps.core.models.audit import AuditLog
 from apps.core.serializers.auth import (
@@ -335,6 +335,27 @@ class DashboardView(APIView):
             ).count()
             total_child_user = total_users - total_parent_user
 
+            # Reverse OneToOne raises if missing, so default to None
+            profile = getattr(user, "user_profile", None)
+
+            if profile is None:
+                return error_response(
+                    message="User profile not found",
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            total_license_unit = profile.total_licence_unit
+            total_users_slot_available = profile.total_user_count
+            total_parent_user_slot_available = profile.parent_user_count
+            total_child_user_slot_available = profile.child_user_count
+            total_device_slot_available = profile.total_device_count
+
+            total_users_slot_remaning = (total_users_slot_available - total_users)
+            total_parent_user_slot_remaning = (total_parent_user_slot_available - total_parent_user)
+            total_child_user_slot_remaning = (total_child_user_slot_available - total_child_user)
+            total_device_slot_remaning = (total_device_slot_available - 0)
+            total_license_unit_remaning = (total_license_unit - (total_users + 0))
+
             return success_response(
                 message="Dashboard stats fetched successfully",
                 data={
@@ -344,6 +365,18 @@ class DashboardView(APIView):
                         "inactive": total_users - total_active_users,
                         "parents": total_parent_user,
                         "children": total_child_user,
+                    },
+                    "profile": {
+                        "total_license_unit": total_license_unit,
+                        "total_users_slot_available": total_users_slot_available,
+                        "parent_user_slot_available": total_parent_user_slot_available,
+                        "child_user_slot_available": total_child_user_slot_available,
+                        "device_slot_available": total_device_slot_available,
+                        "total_license_unit_remaining": total_license_unit_remaning,
+                        "total_users_slot_remaining": total_users_slot_remaning,
+                        "parent_user_slot_remaining": total_parent_user_slot_remaning,
+                        "child_user_slot_remaining": total_child_user_slot_remaning,
+                        "device_slot_remaining": total_device_slot_remaning,
                     },
                 },
             )
