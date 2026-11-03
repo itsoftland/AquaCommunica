@@ -75,19 +75,30 @@
     letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
     background: rgba(255,255,255,.2); border: 1px solid rgba(255,255,255,.35);
 }
-.dash-panel { margin-top: 24px; animation: dash-in .5s ease both; }
-.dash-panel h2 { margin: 0 0 12px; font-size: 1.05rem; color: #52606d; text-transform: uppercase; letter-spacing: .08em; }
-.dash-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
-.dash-tile {
-    padding: 20px; background: #fff; border-radius: 14px; border: 1px solid #e3e8ef;
-    border-left: 4px solid var(--c, #087f8c); box-shadow: 0 1px 3px rgba(16,24,40,.06);
+#dash-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 28px; align-items: stretch; }
+.dash-panel {
+    display: flex; flex-direction: column;
+    position: relative; overflow: hidden; padding: 24px; background: #fff;
+    border-radius: 16px; border: 1px solid #e3e8ef; box-shadow: 0 1px 3px rgba(16,24,40,.06);
+    animation: dash-in .5s ease both; transition: transform .2s ease, box-shadow .2s ease;
 }
-.dash-tile .num { font-size: 2rem; font-weight: 700; color: #1f2933; line-height: 1.1; }
-.dash-tile .lbl { margin-top: 6px; color: #52606d; font-size: .85rem; text-transform: capitalize; }
+.dash-panel::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: linear-gradient(90deg, #087f8c, #05545e); }
+.dash-panel:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(16,24,40,.12); }
+.dash-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #e3e8ef; }
+.dash-head h2 { margin: 0; font-size: .85rem; font-weight: 700; color: #52606d; text-transform: uppercase; letter-spacing: .1em; }
+.dash-head .big { font-size: 2.4rem; font-weight: 800; color: #1f2933; line-height: 1; font-variant-numeric: tabular-nums; }
+.dash-rows { list-style: none; margin: 0; padding: 0; }
+.dash-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px dashed #eef1f5; }
+.dash-row:last-child { border-bottom: 0; }
+.dash-row .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c, #087f8c); flex: none; }
+.dash-row .lbl { flex: 1; color: #52606d; font-size: .88rem; text-transform: capitalize; }
+.dash-row .val { font-weight: 700; color: #1f2933; font-variant-numeric: tabular-nums; }
 .dash-empty { margin-top: 32px; text-align: center; color: #52606d; }
 @keyframes dash-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@media (max-width: 1000px) and (min-width: 769px) { #dash-stats { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 768px) {
     .dash-hero { flex-direction: column; padding: 24px; }
+    #dash-stats { grid-template-columns: 1fr; }
     .dash-hero h1 { font-size: 1.5rem; }
 }
 </style>
@@ -138,24 +149,37 @@ try {
             const panel = document.createElement("section");
             panel.className = "dash-panel";
             panel.style.animationDelay = (0.1 + i * 0.1) + "s";
+            const entries = Object.entries(data[g]);
+            const total = entries.find(([k]) => k === "total");
+            const head = document.createElement("div");
+            head.className = "dash-head";
             const h = document.createElement("h2");
             h.textContent = TITLES[g] || g;
-            const tiles = document.createElement("div");
-            tiles.className = "dash-tiles";
-            Object.entries(data[g]).forEach(([k, v]) => {
-                const t = document.createElement("div");
-                t.className = "dash-tile";
-                t.style.setProperty("--c", COLORS[k] || "#087f8c");
-                const n = document.createElement("div");
-                n.className = "num";
-                n.textContent = v;
-                const l = document.createElement("div");
+            head.appendChild(h);
+            if (total) {
+                const big = document.createElement("span");
+                big.className = "big";
+                big.textContent = total[1];
+                head.appendChild(big);
+            }
+            const list = document.createElement("ul");
+            list.className = "dash-rows";
+            entries.filter(([k]) => k !== "total").forEach(([k, v]) => {
+                const li = document.createElement("li");
+                li.className = "dash-row";
+                li.style.setProperty("--c", COLORS[k] || "#087f8c");
+                const dot = document.createElement("span");
+                dot.className = "dot";
+                const l = document.createElement("span");
                 l.className = "lbl";
                 l.textContent = k;
-                t.append(n, l);
-                tiles.appendChild(t);
+                const n = document.createElement("span");
+                n.className = "val";
+                n.textContent = v;
+                li.append(dot, l, n);
+                list.appendChild(li);
             });
-            panel.append(h, tiles);
+            panel.append(head, list);
             root.appendChild(panel);
         });
     } catch (_) {
