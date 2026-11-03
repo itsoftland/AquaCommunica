@@ -67,6 +67,50 @@ async function authFetch(url, opts = {}) {
 const SOFT_DELETE_URL = "{% url 'user_soft_delete' 0 %}";
 const RESTORE_URL = "{% url 'user_restore' 0 %}";
 const HARD_DELETE_URL = "{% url 'user_hard_delete' 0 %}";
+const SET_PASSWORD_URL = "{% url 'user_set_password' 0 %}";
+let pwUser = null;
+
+function openSetPassword(u) {
+    pwUser = u;
+    document.getElementById("pw-form").reset();
+    document.getElementById("pw-error").textContent = "";
+    document.getElementById("pw-title").textContent = "Set Password - " + u.email;
+    document.getElementById("pw-modal").hidden = false;
+}
+function closeSetPassword() { document.getElementById("pw-modal").hidden = true; pwUser = null; }
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSetPassword(); });
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("pw-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const f = e.target;
+        const err = document.getElementById("pw-error");
+        const submit = document.getElementById("pw-submit");
+        err.textContent = "";
+        if (!pwUser || !f.reportValidity()) return;
+        submit.disabled = true;
+        try {
+            const res = await authFetch(SET_PASSWORD_URL.replace(/0\/set-password\/$/, pwUser.id + "/set-password/"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    new_password: f.new_password.value,
+                    confirm_password: f.confirm_password.value,
+                }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                err.textContent = flattenErrors(json.errors || json.data || json.message || json.detail) || "Unable to set password.";
+            } else {
+                closeSetPassword();
+                showToast("Password changed successfully.");
+            }
+        } catch (_) {
+            err.textContent = "Network error. Please try again.";
+        }
+        submit.disabled = false;
+    });
+});
 
 const CREATE_USER_URL = "{% url 'user_registration' %}";
 const ROLES_BY_CREATOR = {
@@ -293,7 +337,14 @@ async function loadUsers(url = currentUrl) {
         delBtn.title = "Permanently delete";
         delBtn.setAttribute("aria-label", "Permanently delete " + u.email);
         delBtn.addEventListener("click", () => permanentDeleteUser(u, delBtn));
-        aCell.append(delBtn);
+        const pwBtn = document.createElement("button");
+        pwBtn.type = "button";
+        pwBtn.className = "action-btn action-key";
+        pwBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L21 2"/><path d="M17 6l3 3"/><path d="M14 9l2 2"/></svg>';
+        pwBtn.title = "Set password";
+        pwBtn.setAttribute("aria-label", "Set password for " + u.email);
+        pwBtn.addEventListener("click", () => openSetPassword(u));
+        aCell.append(pwBtn, delBtn);
         body.appendChild(tr);
     }
 }
@@ -346,7 +397,23 @@ async function loadUsers(url = currentUrl) {
         </form>
     </div>
 </div>
+<div id="pw-modal" class="modal-backdrop" hidden onclick="if (event.target === this) closeSetPassword()">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h2 id="pw-title">Set Password</h2>
+            <button type="button" class="modal-close" onclick="closeSetPassword()" aria-label="Close">&times;</button>
+        </div>
+        <form id="pw-form" class="add-form" novalidate>
+            <label>New Password<input type="password" name="new_password" minlength="6" required autocomplete="new-password"></label>
+            <label>Confirm Password<input type="password" name="confirm_password" required autocomplete="new-password"></label>
+            <div class="form-error" id="pw-error"></div>
+            <button type="submit" class="btn-add" id="pw-submit">Save</button>
+        </form>
+    </div>
+</div>
 <style>
+.action-key { border: none; background: none; padding: 4px; color: #087f8c; transition: transform .15s ease; }
+.action-key:hover:not(:disabled) { background: none; color: #065e68; transform: scale(1.2); }
 .customer-page { max-width: 100%; }
 .pager { display: flex; justify-content: center; align-items: center; color: #52606d; font-size: .9rem; gap: 12px; margin-top: 12px; }
 .icon-btn { border: none; background: none; color: #087f8c; padding: 4px; border-radius: 6px; cursor: pointer; line-height: 0; vertical-align: middle; }
@@ -417,6 +484,9 @@ async function loadUsers(url = currentUrl) {
 .modal-head h2 { margin: 0; color: #3b3b9c; }
 .modal-close:hover { color: #b42318; }
 .add-form input:focus, .add-form select:focus { outline: 0; border-color: #5b5bd6; box-shadow: 0 0 0 3px rgba(91,91,214,.18); }
+.action-btn.action-key { border: none; background: none; }
+.action-btn.action-key:hover:not(:disabled) { background: none; border: none; color: #065e68; transform: scale(1.2); }
+.action-key svg { transform: scaleX(-1); }
 .pager { background: #fff; width: fit-content; margin: 14px auto 0; padding: 4px 14px; border-radius: 999px; box-shadow: 0 2px 8px rgba(31,41,51,.08); font-weight: 600; color: #5b5bd6; }
 @media (max-width: 768px) {
     body { padding-left: 0; }
