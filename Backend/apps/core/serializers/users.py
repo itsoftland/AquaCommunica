@@ -34,7 +34,7 @@ class ChangePasswordSerializer(serializers.Serializer):
 
             raise serializers.ValidationError(
                 {
-                    "Incorrect current password"
+                    "current_password": "Your current password is incorrect."
                 }
             )
 
@@ -42,7 +42,7 @@ class ChangePasswordSerializer(serializers.Serializer):
 
             raise serializers.ValidationError(
                 {
-                    "New Password : Confirm Password not matching"
+                    "confirm_password": "New password and confirm password do not match."
                 }
             )
 
@@ -50,7 +50,7 @@ class ChangePasswordSerializer(serializers.Serializer):
 
             raise serializers.ValidationError(
                 {
-                    "can't use current password as new password"
+                    "new_password": "New password must be different from your current password."
                 }
             )
 

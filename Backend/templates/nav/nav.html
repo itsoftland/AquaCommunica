@@ -33,11 +33,12 @@
         <h3 id="cp-title">Change Password</h3>
         <form id="cp-form" novalidate>
             <label for="cp-current">Current password</label>
-            <input type="password" id="cp-current" autocomplete="current-password" required>
+            <span class="cp-pw"><input type="password" id="cp-current" autocomplete="current-password" required><button type="button" class="cp-eye" aria-label="Show password" title="Show password"><svg class="eye-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></span>
             <label for="cp-new">New password</label>
-            <input type="password" id="cp-new" autocomplete="new-password" minlength="6" required>
+            <span class="cp-pw"><input type="password" id="cp-new" autocomplete="new-password" minlength="6" required><button type="button" class="cp-eye" aria-label="Show password" title="Show password"><svg class="eye-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></span>
             <label for="cp-confirm">Confirm new password</label>
-            <input type="password" id="cp-confirm" autocomplete="new-password" required>
+            <span class="cp-pw"><input type="password" id="cp-confirm" autocomplete="new-password" required><button type="button" class="cp-eye" aria-label="Show password" title="Show password"><svg class="eye-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></span>
+            <div class="cp-hint" id="cp-hint" aria-live="polite"></div>
             <div class="cp-msg" id="cp-msg" role="alert"></div>
             <div class="cp-actions">
                 <button type="button" id="cp-cancel">Cancel</button>
@@ -182,6 +183,16 @@
 .cp-modal h3 { margin: 0 0 16px; }
 .cp-modal label { display: block; margin: 12px 0 4px; font-size: .85rem; font-weight: 600; }
 .cp-modal input { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #bbb; border-radius: 6px; font-size: .95rem; }
+.cp-pw { position: relative; display: block; }
+.cp-pw input { padding-right: 38px; }
+.cp-pw input.pw-ok { border-color: #1e8449; }
+.cp-pw input.pw-bad { border-color: #c0392b; }
+.cp-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: 0; padding: 4px; line-height: 0; cursor: pointer; color: #666; border-radius: 6px; }
+.cp-eye:hover { color: #087f8c; }
+.cp-eye svg[hidden] { display: none; }
+.cp-hint { min-height: 1.1em; margin-top: 8px; font-size: .8rem; font-weight: 600; }
+.cp-hint.ok { color: #1e8449; }
+.cp-hint.bad { color: #c0392b; }
 .cp-msg { min-height: 1.2em; margin-top: 12px; font-size: .85rem; color: #c0392b; }
 .cp-msg.ok { color: #1e8449; }
 .cp-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
@@ -237,7 +248,37 @@ document.querySelectorAll(".nav-list a").forEach((a) => {
     const msg = document.getElementById("cp-msg");
     const submit = document.getElementById("cp-submit");
     const show = (text, ok) => { msg.textContent = text; msg.classList.toggle("ok", !!ok); };
-    const close = () => { overlay.hidden = true; form.reset(); show(""); };
+    const hint = document.getElementById("cp-hint");
+    const pwNew = document.getElementById("cp-new");
+    const pwConfirm = document.getElementById("cp-confirm");
+    const checkMatch = () => {
+        pwConfirm.classList.remove("pw-ok", "pw-bad");
+        hint.className = "cp-hint";
+        if (!pwNew.value && !pwConfirm.value) { hint.textContent = ""; return; }
+        if (pwNew.value.length < 6) { hint.textContent = "New password must be at least 6 characters."; hint.classList.add("bad"); return; }
+        if (!pwConfirm.value) { hint.textContent = ""; return; }
+        const ok = pwNew.value === pwConfirm.value;
+        pwConfirm.classList.add(ok ? "pw-ok" : "pw-bad");
+        hint.textContent = ok ? "\u2713 Passwords match" : "\u2717 Passwords do not match";
+        hint.classList.add(ok ? "ok" : "bad");
+    };
+    pwNew.addEventListener("input", checkMatch);
+    pwConfirm.addEventListener("input", checkMatch);
+    const setEye = (btn, show) => {
+        btn.parentElement.querySelector("input").type = show ? "text" : "password";
+        btn.querySelector(".eye-on").hidden = show;
+        btn.querySelector(".eye-off").hidden = !show;
+        btn.setAttribute("aria-label", show ? "Hide password" : "Show password");
+        btn.title = show ? "Hide password" : "Show password";
+    };
+    form.querySelectorAll(".cp-eye").forEach((btn) => btn.addEventListener("click", () => {
+        setEye(btn, btn.parentElement.querySelector("input").type === "password");
+    }));
+    const close = () => {
+        overlay.hidden = true; form.reset(); show("");
+        form.querySelectorAll(".cp-eye").forEach((b) => setEye(b, false));
+        checkMatch();
+    };
 
     document.getElementById("change-password-link").addEventListener("click", (e) => {
         e.preventDefault();

@@ -75,7 +75,21 @@ function openSetPassword(u) {
     document.getElementById("pw-form").reset();
     document.getElementById("pw-error").textContent = "";
     document.getElementById("pw-title").textContent = "Set Password - " + u.email;
+    document.querySelectorAll("#pw-form .pw-toggle.on").forEach(togglePw);
+    checkSetPw();
     document.getElementById("pw-modal").hidden = false;
+    setTimeout(() => document.querySelector("#pw-form [name=new_password]").focus(), 0);
+}
+function checkSetPw() {
+    const f = document.getElementById("pw-form");
+    const hint = document.getElementById("pw-hint");
+    const p = f.new_password.value, c = f.confirm_password.value;
+    hint.className = "pw-hint";
+    if (!p && !c) { hint.textContent = ""; return; }
+    if (p.length < 6) { hint.textContent = "Password must be at least 6 characters."; return; }
+    if (c && p !== c) { hint.textContent = "Passwords do not match."; return; }
+    if (c && p === c) { hint.textContent = "\u2713 Passwords match"; hint.classList.add("ok"); return; }
+    hint.textContent = "";
 }
 function closeSetPassword() { document.getElementById("pw-modal").hidden = true; pwUser = null; }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSetPassword(); });
@@ -88,6 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const submit = document.getElementById("pw-submit");
         err.textContent = "";
         if (!pwUser || !f.reportValidity()) return;
+        if (f.new_password.value !== f.confirm_password.value) { err.textContent = "Passwords do not match."; f.confirm_password.focus(); return; }
         submit.disabled = true;
         try {
             const res = await authFetch(SET_PASSWORD_URL.replace(/0\/set-password\/$/, pwUser.id + "/set-password/"), {
@@ -140,7 +155,27 @@ function openAddUser() {
     }
     document.getElementById("add-form").reset();
     document.getElementById("add-error").textContent = "";
+    checkAddPw();
     document.getElementById("add-modal").hidden = false;
+    setTimeout(() => document.querySelector("#add-form [name=email]").focus(), 0);
+}
+function togglePw(btn) {
+    const input = btn.parentElement.querySelector("input");
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    btn.setAttribute("aria-label", show ? "Hide password" : "Show password");
+    btn.classList.toggle("on", show);
+}
+function checkAddPw() {
+    const f = document.getElementById("add-form");
+    const hint = document.getElementById("add-pw-hint");
+    const p = f.password.value, c = f.password_confirm.value;
+    hint.className = "pw-hint";
+    if (!p && !c) { hint.textContent = ""; return; }
+    if (p.length < 6) { hint.textContent = "Password must be at least 6 characters."; return; }
+    if (c && p !== c) { hint.textContent = "Passwords do not match."; return; }
+    if (c && p === c) { hint.textContent = "\u2713 Passwords match"; hint.classList.add("ok"); return; }
+    hint.textContent = "";
 }
 function closeAddUser() { document.getElementById("add-modal").hidden = true; }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAddUser(); });
@@ -153,7 +188,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const submit = document.getElementById("add-submit");
         err.textContent = "";
         if (!f.reportValidity()) return;
+        if (f.password.value !== f.password_confirm.value) { err.textContent = "Passwords do not match."; f.password_confirm.focus(); return; }
         submit.disabled = true;
+        submit.textContent = "Creating\u2026";
         try {
             const res = await authFetch(CREATE_USER_URL, {
                 method: "POST",
@@ -171,11 +208,13 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 closeAddUser();
                 loadUsers();
+                showToast("User created successfully.");
             }
         } catch (_) {
             err.textContent = "Network error. Please try again.";
         }
         submit.disabled = false;
+        submit.textContent = "Create User";
     });
 });
 
@@ -436,13 +475,26 @@ async function loadUsers(url = currentUrl) {
             <h2>Add User</h2>
             <button type="button" class="modal-close" onclick="closeAddUser()" aria-label="Close">&times;</button>
         </div>
+        <p class="modal-sub">Create a new account. The user can sign in with these credentials right away.</p>
         <form id="add-form" class="add-form" novalidate>
-            <label>Email<input type="email" name="email" required autocomplete="off"></label>
-            <label>Role<select name="role" id="add-role" required></select></label>
-            <label>Password<input type="password" name="password" minlength="6" required autocomplete="new-password"></label>
-            <label>Confirm Password<input type="password" name="password_confirm" required autocomplete="new-password"></label>
-            <div class="form-error" id="add-error"></div>
-            <button type="submit" class="btn-add" id="add-submit">Create</button>
+            <label>Email address
+                <input type="email" name="email" placeholder="name@example.com" required autocomplete="off">
+            </label>
+            <label>Role
+                <select name="role" id="add-role" required></select>
+            </label>
+            <label>Password
+                <span class="pw-wrap"><input type="password" name="password" placeholder="At least 6 characters" minlength="6" required autocomplete="new-password" oninput="checkAddPw()"><button type="button" class="pw-toggle" onclick="togglePw(this)" aria-label="Show password" title="Show / hide password"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></span>
+            </label>
+            <label>Confirm password
+                <span class="pw-wrap"><input type="password" name="password_confirm" placeholder="Re-enter password" required autocomplete="new-password" oninput="checkAddPw()"><button type="button" class="pw-toggle" onclick="togglePw(this)" aria-label="Show password" title="Show / hide password"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></span>
+            </label>
+            <div class="pw-hint" id="add-pw-hint"></div>
+            <div class="form-error" id="add-error" role="alert"></div>
+            <div class="form-actions">
+                <button type="button" class="btn-cancel" onclick="closeAddUser()">Cancel</button>
+                <button type="submit" class="btn-add" id="add-submit">Create User</button>
+            </div>
         </form>
     </div>
 </div>
@@ -453,9 +505,10 @@ async function loadUsers(url = currentUrl) {
             <button type="button" class="modal-close" onclick="closeSetPassword()" aria-label="Close">&times;</button>
         </div>
         <form id="pw-form" class="add-form" novalidate>
-            <label>New Password<input type="password" name="new_password" minlength="6" required autocomplete="new-password"></label>
-            <label>Confirm Password<input type="password" name="confirm_password" required autocomplete="new-password"></label>
-            <div class="form-error" id="pw-error"></div>
+            <label>New Password<span class="pw-wrap"><input type="password" name="new_password" placeholder="At least 6 characters" minlength="6" required autocomplete="new-password" oninput="checkSetPw()"><button type="button" class="pw-toggle" onclick="togglePw(this)" aria-label="Show password" title="Show / hide password"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
+            <label>Confirm Password<span class="pw-wrap"><input type="password" name="confirm_password" placeholder="Re-enter password" required autocomplete="new-password" oninput="checkSetPw()"><button type="button" class="pw-toggle" onclick="togglePw(this)" aria-label="Show password" title="Show / hide password"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
+            <div class="pw-hint" id="pw-hint"></div>
+            <div class="form-error" id="pw-error" role="alert"></div>
             <button type="submit" class="btn-add" id="pw-submit">Save</button>
         </form>
     </div>
@@ -545,6 +598,19 @@ async function loadUsers(url = currentUrl) {
 .filter-bar select:focus, .filter-bar input:focus { outline: 0; border-color: #5b5bd6; box-shadow: 0 0 0 3px rgba(91,91,214,.18); }
 .filter-bar .action-btn { padding: 8px 18px; border-color: #b42318; color: #b42318; background: #fff; }
 .filter-bar .action-btn:hover:not(:disabled) { background: linear-gradient(135deg, #ef4444, #b42318); border-color: transparent; color: #fff; }
+.modal-sub { margin: 0 0 14px; color: #52606d; font-size: .85rem; }
+.pw-wrap { position: relative; display: block; }
+.pw-wrap input { width: 100%; box-sizing: border-box; padding-right: 38px; }
+.pw-toggle { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; color: #7b8794; cursor: pointer; padding: 4px; line-height: 0; border-radius: 6px; }
+.pw-toggle:hover, .pw-toggle.on { color: #5b5bd6; }
+.pw-hint { min-height: 1em; font-size: .8rem; color: #b42318; }
+.pw-hint.ok { color: #047857; }
+.form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.btn-cancel { border: 1.5px solid #d3d9f5; background: #fff; color: #52606d; border-radius: 999px; padding: 9px 18px; font-size: .9rem; font-weight: 600; cursor: pointer; }
+.btn-cancel:hover { background: #f4f0ff; border-color: #5b5bd6; color: #5b5bd6; }
+.add-form input, .add-form select { width: 100%; box-sizing: border-box; padding: 9px 10px; }
+.add-form .form-actions .btn-add { justify-self: auto; }
+@media (max-width: 480px) { .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } }
 @media (max-width: 768px) {
     body { padding-left: 0; }
     .page-head { flex-wrap: wrap; gap: 10px; }
