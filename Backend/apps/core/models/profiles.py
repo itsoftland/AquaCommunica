@@ -331,7 +331,7 @@ class DealerProfile(models.Model):
         blank=True,
     )
 
-    city = models.CharField(
+    district = models.CharField(
         max_length=100,
         blank=True,
     )

@@ -87,7 +87,7 @@ class DealerProfileDisplaySerializer(serializers.ModelSerializer):
             'phone_number',
             'contact_email',
             'address',
-            'city',
+            'district',
             'state',
             'pincode',
             'gst_number',
@@ -117,3 +117,7 @@ class DealerProfileUpdateSerializer(BaseProfileUpdateSerializer):
 
     class Meta(BaseProfileUpdateSerializer.Meta):
         model = DealerProfile
+        fields = [
+            'district' if f == 'city' else f
+            for f in BaseProfileUpdateSerializer.Meta.fields
+        ]
