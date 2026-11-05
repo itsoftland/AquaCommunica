@@ -2,6 +2,7 @@ import logging
 
 from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Count, When, Case, IntegerField
+from django.utils import timezone
 
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
@@ -80,6 +81,16 @@ class LoginSerializer(serializers.Serializer):
                     "Your profile is not active. Contact admin."
                 )
 
+
+            if (
+                profile.validity_to_date
+                and profile.validity_to_date < timezone.localdate()
+            ):
+
+                log_auth.info("login failed due to expired profile validity | email=%s", email)
+                raise PermissionDenied(
+                    "Your profile validity has ended. Contact admin for renewal."
+                )
 
         # A new session invalidates tokens issued to any other device.
         session_id = user.start_new_session()

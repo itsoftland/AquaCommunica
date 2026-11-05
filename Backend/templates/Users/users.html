@@ -246,6 +246,15 @@ const LIST_URL = "{% url 'users_list' %}";
 let currentUrl = LIST_URL;
 let prevUrl = null, nextUrl = null, pageSize = 0;
 
+document.addEventListener("DOMContentLoaded", () => {
+    let me = {};
+    try { me = JSON.parse(localStorage.getItem("user") || "{}"); } catch (_) {}
+    const select = document.getElementById("f-role");
+    for (const [value, label] of (ROLES_BY_CREATOR[me.role] || [])) {
+        select.add(new Option(label, value));
+    }
+});
+
 function applyFilters() {
     const params = new URLSearchParams();
     [["f-role", "role"], ["f-verified", "is_verified"], ["f-status", "is_active"], ["f-created", "created_at"]]
@@ -375,10 +384,6 @@ async function loadUsers(url = currentUrl) {
         <label>Role
             <select id="f-role" onchange="applyFilters()">
                 <option value="">All</option>
-                <option value="executive">Executive</option>
-                <option value="dealer">Dealer</option>
-                <option value="production">Production</option>
-                <option value="user_admin">User Admin</option>
             </select>
         </label>
         <label>Verified
