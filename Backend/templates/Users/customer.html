@@ -46,7 +46,45 @@
     loadCustomers();
 })();
 
-const REGISTER_URL = "{% url 'reg_user_profile_with_ls' 0 %}";
+function toast(msg, type) {
+    type = type || (/fail|error|unable|invalid|denied/i.test(msg) ? "error" : "success");
+    let box = document.getElementById("toast-box");
+    if (!box) {
+        box = document.createElement("div");
+        box.id = "toast-box";
+        box.setAttribute("aria-live", "polite");
+        document.body.appendChild(box);
+    }
+    const t = document.createElement("div");
+    t.className = "toast toast-" + type;
+    t.textContent = msg;
+    t.onclick = () => t.remove();
+    box.appendChild(t);
+    setTimeout(() => t.remove(), 6000);
+}
+
+document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    document.querySelectorAll(".modal-overlay:not([hidden])").forEach((m) => { m.hidden = true; });
+});
+
+function applySearch() {
+    const q = document.getElementById("f-search").value.trim().toLowerCase();
+    const rows = document.querySelectorAll("#customer-body tr.cust-row");
+    let shown = 0;
+    rows.forEach((tr) => {
+        const hit = !q || tr.dataset.search.includes(q);
+        tr.hidden = !hit;
+        if (hit) shown++;
+    });
+    const none = document.getElementById("search-none");
+    if (none) none.hidden = !(rows.length && !shown);
+    const info = document.getElementById("result-info");
+    if (rows.length) info.textContent = q ? shown + " of " + rows.length + " customers on this page" : rows.length + " customers on this page";
+    else info.textContent = "";
+}
+
+const REGISTER_URL ="{% url 'reg_user_profile_with_ls' 0 %}";
 const VALIDATE_URL = "{% url 'validate_user_profile_license' 0 %}";
 const SYNC_URL = "{% url 'sync_user_profile_license' 0 %}";
 const SYNC_CONFIRM_URL = "{% url 'sync_user_profile_license_confirm' 0 %}";
@@ -62,9 +100,9 @@ async function licenseAction(urlTemplate, id, btn) {
         });
         const json = await res.json().catch(() => ({}));
         const detail = json.data && json.data.error ? ". " + json.data.error : "";
-        alert((json.message || (res.ok ? "Done." : "Request failed.")) + detail);
+        toast((json.message || (res.ok ? "Done." : "Request failed.")) + detail);
     } catch (_) {
-        alert("Network error. Please try again.");
+        toast("Network error. Please try again.");
     }
     btn.disabled = false;
     btn.textContent = label;
@@ -348,13 +386,13 @@ async function openSyncModal(id, btn) {
     } catch (_) {
         btn.disabled = false;
         btn.textContent = label;
-        return alert("Network error. Please try again.");
+        return toast("Network error. Please try again.");
     }
     btn.disabled = false;
     btn.textContent = label;
     if (!res.ok) {
         const d = json.data;
-        return alert((json.message || "Request failed.") + (typeof d === "string" ? " (" + d + ")" : ""));
+        return toast((json.message || "Request failed.") + (typeof d === "string" ? " (" + d + ")" : ""));
     }
 
     const { current, incoming, error } = json.data;
@@ -402,10 +440,10 @@ async function confirmSync(id, btn) {
         const json = await res.json().catch(() => ({}));
         const d = json.data;
         const detail = !res.ok && typeof d === "string" ? " (" + d + ")" : "";
-        alert((json.message || (res.ok ? "Synced." : "Sync failed.")) + detail);
+        toast((json.message || (res.ok ? "Synced." : "Sync failed.")) + detail);
         if (res.ok) closeSyncModal();
     } catch (_) {
-        alert("Network error. Please try again.");
+        toast("Network error. Please try again.");
     }
     btn.disabled = false;
     btn.textContent = "Confirm Sync";
@@ -424,7 +462,7 @@ async function validateThenSync(id, btn) {
     const fail = (title, r) => {
         const d = r.json.data;
         const detail = typeof d === "string" ? " (" + d + ")" : (d && d.error ? " (" + d.error + ")" : "");
-        alert(title + ": " + (r.json.message || "Request failed.") + detail);
+        toast(title + ": " + (r.json.message || "Request failed.") + detail);
     };
 
     btn.disabled = true;
@@ -441,9 +479,9 @@ async function validateThenSync(id, btn) {
         btn.textContent = "Syncing...";
         const c = await post(SYNC_CONFIRM_URL);
         if (!c.res.ok) return fail("Sync failed", c);
-        alert(c.json.message || "License data synced successfully.");
+        toast(c.json.message || "License data synced successfully.");
     } catch (_) {
-        alert("Network error. Please try again.");
+        toast("Network error. Please try again.");
     } finally {
         btn.disabled = false;
         btn.textContent = label;
@@ -466,18 +504,22 @@ function applyFilters() {
     loadCustomers(LIST_URL + (qs ? "?" + qs : ""));
 }
 function clearFilters() {
-    ["f-auth", "f-status", "f-validity"].forEach(id => { document.getElementById(id).value = ""; });
+    ["f-auth", "f-status", "f-validity", "f-search"].forEach(id => { document.getElementById(id).value = ""; });
     applyFilters();
 }
 
 async function loadCustomers(url = currentUrl) {
     const body = document.getElementById("customer-body");
     const cols = 11;
+    document.getElementById("customer-table").classList.add("is-loading");
     const message = (text) => {
+        document.getElementById("customer-table").classList.remove("is-loading");
+        document.getElementById("result-info").textContent = "";
         body.innerHTML = "";
         const tr = document.createElement("tr");
         const td = document.createElement("td");
         td.colSpan = cols;
+        td.className = "empty-cell";
         td.textContent = text;
         tr.appendChild(td);
         body.appendChild(tr);
@@ -506,11 +548,16 @@ async function loadCustomers(url = currentUrl) {
     document.getElementById("pager-info").textContent = page + " / " + pages;
     document.getElementById("pager-prev").disabled = !prevUrl;
     document.getElementById("pager-next").disabled = !nextUrl;
-    if (!rows.length) return message("No customers yet.");
+    const filtered = url.includes("?");
+    if (!rows.length) return message(filtered ? "No customers match the selected filters. Try clearing them." : "No customers yet. Click \"+ Add Customer\" to create one.");
 
+    document.getElementById("customer-table").classList.remove("is-loading");
     body.innerHTML = "";
     for (const p of rows) {
         const tr = document.createElement("tr");
+        tr.className = "cust-row";
+        tr.dataset.search = [p.profile_id, p.first_name, p.last_name, p.user_email, p.district, p.contact_email, p.phone_number]
+            .filter(Boolean).join(" ").toLowerCase();
         [
             p.profile_id,
             [p.first_name, p.last_name].filter(Boolean).join(" "),
@@ -526,6 +573,12 @@ async function loadCustomers(url = currentUrl) {
             td.textContent = (v === null || v === undefined || v === "") ? "-" : v;
             tr.appendChild(td);
         });
+        const authBadge = document.createElement("span");
+        const authCell = tr.children[7];
+        authBadge.className = "badge badge-auth-" + (authCell.textContent || "").toLowerCase();
+        authBadge.textContent = authCell.textContent;
+        authCell.textContent = "";
+        authCell.appendChild(authBadge);
         const statusCell = tr.lastElementChild;
         const badge = document.createElement("span");
         badge.className = "badge " + (p.is_profile_active ? "badge-green" : "badge-red");
@@ -564,6 +617,12 @@ async function loadCustomers(url = currentUrl) {
         tr.appendChild(profileTd);
         body.appendChild(tr);
     }
+    const none = document.createElement("tr");
+    none.id = "search-none";
+    none.hidden = true;
+    none.innerHTML = `<td colspan="${cols}" class="empty-cell">No customers on this page match your search.</td>`;
+    body.appendChild(none);
+    applySearch();
 }
 </script>
 
@@ -574,6 +633,9 @@ async function loadCustomers(url = currentUrl) {
         <button class="action-btn primary add-btn" onclick="openAddModal()">+ Add Customer</button>
     </div>
     <div class="filter-bar">
+        <label class="search-label">Search
+            <input type="search" id="f-search" placeholder="Name, email, profile ID, district..." oninput="applySearch()" autocomplete="off">
+        </label>
         <label>Authentication
             <select id="f-auth" onchange="applyFilters()">
                 <option value="">All</option>
@@ -592,8 +654,9 @@ async function loadCustomers(url = currentUrl) {
         </label>
         <button type="button" class="action-btn" onclick="clearFilters()">Clear</button>
     </div>
+    <div id="result-info" class="result-info" aria-live="polite"></div>
     <div class="customer-table-wrap">
-        <table class="customer-table">
+        <table class="customer-table" id="customer-table">
             <thead>
                 <tr>
                     <th>Profile ID</th>
@@ -790,13 +853,29 @@ async function loadCustomers(url = currentUrl) {
     .modal-actions .action-btn { flex: 1 1 120px; }
 }
 .filter-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin-bottom: 14px; padding: 14px 18px; background: linear-gradient(135deg, #ffffff, #f4f0ff); border: 1px solid #d6e4f0; border-left: 5px solid #5b5bd6; border-radius: 12px; box-shadow: 0 2px 10px rgba(91,91,214,.10); }
-.filter-bar::before { content: "Filters"; align-self: center; font-weight: 800; font-size: .85rem; letter-spacing: .06em; text-transform: uppercase; background: linear-gradient(90deg, #087f8c, #5b5bd6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.filter-bar::before { content: "Filters"; flex: 0 0 100%; align-self: center; font-weight: 800; font-size: .85rem; letter-spacing: .06em; text-transform: uppercase; background: linear-gradient(90deg, #087f8c, #5b5bd6); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .filter-bar label { display: flex; flex-direction: column; font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #5b5bd6; gap: 5px; }
 .filter-bar select, .filter-bar input { padding: 8px 12px; border: 1.5px solid #d3d9f5; border-radius: 999px; font-size: .9rem; color: #1f2933; background: #fff; min-width: 150px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
 .filter-bar select:hover, .filter-bar input:hover { border-color: #5b5bd6; }
 .filter-bar select:focus, .filter-bar input:focus { outline: 0; border-color: #5b5bd6; box-shadow: 0 0 0 3px rgba(91,91,214,.18); }
-.filter-bar .action-btn { padding: 8px 18px; border-color: #b42318; color: #b42318; background: #fff; }
+.filter-bar { position: relative; }
+.filter-bar .action-btn { position: absolute; top: 12px; right: 18px; margin: 0; padding: 6px 16px; border-color: #b42318; color: #b42318; background: #fff; }
 .filter-bar .action-btn:hover:not(:disabled) { background: linear-gradient(135deg, #ef4444, #b42318); border-color: transparent; color: #fff; }
+.search-label input { min-width: 260px; cursor: text; }
+.result-info { font-size: .82rem; color: #52606d; margin: 0 4px 8px; min-height: 1.1em; }
+.customer-table tbody tr[hidden] { display: none; }
+.customer-table.is-loading tbody { opacity: .45; transition: opacity .15s; }
+.customer-table-wrap { max-height: 70vh; overflow-y: auto; }
+.customer-table-wrap .customer-table th { position: sticky; top: 0; z-index: 1; }
+.empty-cell { text-align: center; padding: 36px 12px !important; color: #52606d !important; white-space: normal !important; }
+.badge-auth-approved { background: #d1fae5; color: #047857; }
+.badge-auth-pending, .badge-auth-validating { background: #fef3c7; color: #b45309; }
+.badge-auth-expired, .badge-auth-blocked { background: #fee2e2; color: #b91c1c; }
+#toast-box { position: fixed; top: 16px; right: 16px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 32px)); }
+.toast { padding: 12px 16px; border-radius: 10px; color: #fff; font-size: .9rem; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.25); cursor: pointer; animation: toast-in .2s ease-out; }
+.toast-success { background: linear-gradient(135deg, #0ea5a4, #1a7f45); }
+.toast-error { background: linear-gradient(135deg, #ef4444, #b42318); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 .modal-sub { margin: 0 0 14px; color: #52606d; font-size: .85rem; }
 .create-form input { box-sizing: border-box; padding: 9px 10px; }
 .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; }
