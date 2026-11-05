@@ -174,6 +174,24 @@ class ListUserProfiles(APIView):
 
         user_created_profiles = get_user_profiles_list(user)
 
+        auth_status = request.query_params.get("authentication_status")
+        if auth_status:
+            user_created_profiles = user_created_profiles.filter(
+                authentication_status=auth_status
+            )
+
+        active = request.query_params.get("is_profile_active")
+        if active in ("true", "false"):
+            user_created_profiles = user_created_profiles.filter(
+                is_profile_active=(active == "true")
+            )
+
+        validity_till = request.query_params.get("validity_till")
+        if validity_till:
+            user_created_profiles = user_created_profiles.filter(
+                validity_to_date__lte=validity_till
+            )
+
         paginator = CustomPagination()
 
         paginated_profiles = paginator.paginate_queryset(

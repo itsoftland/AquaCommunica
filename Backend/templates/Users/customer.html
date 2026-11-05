@@ -2,6 +2,8 @@
 {% block title %}Customer | AquaCommunica{% endblock %}
 
 {% block content %}
+{% load static %}
+<script src="{% static 'js/india-districts.js' %}"></script>
 <style id="auth-guard-style">body { visibility: hidden; }</style>
 <script>
 (async () => {
@@ -77,8 +79,8 @@ const PROFILE_FIELDS = [
     ["phone_number", "Phone Number"],
     ["contact_email", "Contact Email"],
     ["address", "Address"],
-    ["district", "District"],
     ["state", "State"],
+    ["district", "District"],
     ["pincode", "Pincode"],
     ["gst_number", "GST Number"],
 ];
@@ -146,10 +148,28 @@ const ICON_EDIT = `<svg ${SVG_ATTRS}><path d="M12 20h9"/><path d="M16.5 3.5a2.12
 
 let editingId = null;
 
+function fillDistricts(stateSel, districtSel, selected) {
+    const list = INDIA_DISTRICTS[stateSel.value] || [];
+    districtSel.textContent = "";
+    districtSel.appendChild(new Option(stateSel.value ? "Select District" : "Select State first", ""));
+    const items = selected && !list.includes(selected) ? [selected, ...list] : list;
+    items.forEach((n) => districtSel.appendChild(new Option(n, n)));
+    districtSel.value = selected || "";
+}
+
+function fillStates(select, current) {
+    const states = !current || INDIAN_STATES.includes(current) ? INDIAN_STATES : [current, ...INDIAN_STATES];
+    select.textContent = "";
+    select.appendChild(new Option("Select State", ""));
+    states.forEach((n) => select.appendChild(new Option(n, n)));
+}
+
 function openEditModal(p) {
     editingId = p.id;
     const f = document.getElementById("edit-form");
+    fillStates(f.state, p.state);
     PROFILE_FIELDS.forEach(([key]) => { f[key].value = p[key] ?? ""; });
+    fillDistricts(f.state, f.district, p.district);
     document.getElementById("edit-error").hidden = true;
     document.getElementById("edit-modal").hidden = false;
 }
@@ -181,6 +201,8 @@ function flattenErrors(v) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    const editForm = document.getElementById("edit-form");
+    editForm.state.addEventListener("change", () => fillDistricts(editForm.state, editForm.district, ""));
     document.getElementById("edit-form").addEventListener("submit", async (e) => {
         e.preventDefault();
         const f = e.target;
@@ -395,6 +417,21 @@ const LIST_URL = "{% url 'get_user_profile_list' %}";
 let currentUrl = LIST_URL;
 let prevUrl = null, nextUrl = null, pageSize = 0;
 
+function applyFilters() {
+    const params = new URLSearchParams();
+    [["f-auth", "authentication_status"], ["f-status", "is_profile_active"], ["f-validity", "validity_till"]]
+        .forEach(([id, name]) => {
+            const v = document.getElementById(id).value;
+            if (v) params.set(name, v);
+        });
+    const qs = params.toString();
+    loadCustomers(LIST_URL + (qs ? "?" + qs : ""));
+}
+function clearFilters() {
+    ["f-auth", "f-status", "f-validity"].forEach(id => { document.getElementById(id).value = ""; });
+    applyFilters();
+}
+
 async function loadCustomers(url = currentUrl) {
     const body = document.getElementById("customer-body");
     const cols = 11;
@@ -498,6 +535,25 @@ async function loadCustomers(url = currentUrl) {
         <h1>Customers</h1>
         <button class="action-btn primary add-btn" onclick="openAddModal()">+ Add Customer</button>
     </div>
+    <div class="filter-bar">
+        <label>Authentication
+            <select id="f-auth" onchange="applyFilters()">
+                <option value="">All</option>
+                <option>Pending</option><option>Validating</option><option>Approved</option><option>Expired</option><option>Blocked</option>
+            </select>
+        </label>
+        <label>Status
+            <select id="f-status" onchange="applyFilters()">
+                <option value="">All</option>
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+            </select>
+        </label>
+        <label>Validity Till
+            <input type="date" id="f-validity" onchange="applyFilters()">
+        </label>
+        <button type="button" class="action-btn" onclick="clearFilters()">Clear</button>
+    </div>
     <div class="customer-table-wrap">
         <table class="customer-table">
             <thead>
@@ -577,8 +633,8 @@ async function loadCustomers(url = currentUrl) {
             <label>Phone Number<input type="text" name="phone_number"></label>
             <label>Contact Email<input type="email" name="contact_email"></label>
             <label>Address<input type="text" name="address"></label>
-            <label>District<input type="text" name="district"></label>
-            <label>State<input type="text" name="state"></label>
+            <label>State<select name="state"></select></label>
+            <label>District<select name="district"></select></label>
             <label>Pincode<input type="text" name="pincode"></label>
             <label>GST Number<input type="text" name="gst_number"></label>
             <div id="edit-error" class="form-error" hidden></div>
@@ -625,7 +681,7 @@ async function loadCustomers(url = currentUrl) {
 .modal-close { background: none; border: 0; font-size: 1.6rem; cursor: pointer; color: #52606d; }
 .edit-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .edit-form label { display: flex; flex-direction: column; font-size: .85rem; font-weight: 600; color: #52606d; gap: 4px; margin: 0; }
-.edit-form input { padding: 7px 8px; border: 1px solid #cbd2d9; border-radius: 4px; font-size: .9rem; margin: 0; }
+.edit-form input, .edit-form select { background: #fff; padding: 7px 8px; border: 1px solid #cbd2d9; border-radius: 4px; font-size: .9rem; margin: 0; }
 .form-error { grid-column: 1 / -1; color: #b42318; font-size: .85rem; }
 .form-error[hidden] { display: none; }
 .btn-action { border: 0; border-radius: 4px; padding: 4px 10px; font-size: .8rem; font-weight: 600; color: #fff; cursor: pointer; }
@@ -662,7 +718,7 @@ async function loadCustomers(url = currentUrl) {
 .modal { border-radius: 14px; border-top: 5px solid #5b5bd6; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
 .modal h2, .modal-head h2 { color: #3b3b9c; }
 .modal-close:hover { color: #b42318; }
-.edit-form input:focus { outline: 0; border-color: #5b5bd6; box-shadow: 0 0 0 3px rgba(91,91,214,.18); }
+.edit-form input:focus, .edit-form select:focus { outline: 0; border-color: #5b5bd6; box-shadow: 0 0 0 3px rgba(91,91,214,.18); }
 .btn-edit { background: linear-gradient(135deg, #0ea5a4, #1a7f45); border-radius: 999px; }
 .action-btn.primary { background: linear-gradient(135deg, #0ea5a4, #5b5bd6); border-color: transparent; }
 .pager { background: #fff; width: fit-content; margin: 14px auto 0; padding: 4px 14px; border-radius: 999px; box-shadow: 0 2px 8px rgba(31,41,51,.08); font-weight: 600; color: #5b5bd6; }
@@ -676,5 +732,13 @@ async function loadCustomers(url = currentUrl) {
     .modal-actions { flex-wrap: wrap; }
     .modal-actions .action-btn { flex: 1 1 120px; }
 }
+.filter-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin-bottom: 14px; padding: 14px 18px; background: linear-gradient(135deg, #ffffff, #f4f0ff); border: 1px solid #d6e4f0; border-left: 5px solid #5b5bd6; border-radius: 12px; box-shadow: 0 2px 10px rgba(91,91,214,.10); }
+.filter-bar::before { content: "Filters"; align-self: center; font-weight: 800; font-size: .85rem; letter-spacing: .06em; text-transform: uppercase; background: linear-gradient(90deg, #087f8c, #5b5bd6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.filter-bar label { display: flex; flex-direction: column; font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #5b5bd6; gap: 5px; }
+.filter-bar select, .filter-bar input { padding: 8px 12px; border: 1.5px solid #d3d9f5; border-radius: 999px; font-size: .9rem; color: #1f2933; background: #fff; min-width: 150px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.filter-bar select:hover, .filter-bar input:hover { border-color: #5b5bd6; }
+.filter-bar select:focus, .filter-bar input:focus { outline: 0; border-color: #5b5bd6; box-shadow: 0 0 0 3px rgba(91,91,214,.18); }
+.filter-bar .action-btn { padding: 8px 18px; border-color: #b42318; color: #b42318; background: #fff; }
+.filter-bar .action-btn:hover:not(:disabled) { background: linear-gradient(135deg, #ef4444, #b42318); border-color: transparent; color: #fff; }
 </style>
 {% endblock %}

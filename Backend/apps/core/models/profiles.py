@@ -82,12 +82,12 @@ class UserProfile(models.Model):
         blank=True,
     )
 
-    district = models.CharField(
+    state = models.CharField(
         max_length=100,
         blank=True,
     )
 
-    state = models.CharField(
+    district = models.CharField(
         max_length=100,
         blank=True,
     )
@@ -331,12 +331,12 @@ class DealerProfile(models.Model):
         blank=True,
     )
 
-    district = models.CharField(
+    state = models.CharField(
         max_length=100,
         blank=True,
     )
 
-    state = models.CharField(
+    district = models.CharField(
         max_length=100,
         blank=True,
     )
