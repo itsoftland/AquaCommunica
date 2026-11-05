@@ -83,13 +83,13 @@ class LoginSerializer(serializers.Serializer):
 
 
             if (
-                profile.validity_to_date
-                and profile.validity_to_date < timezone.localdate()
+                profile.validity_to_date is None
+                or profile.validity_to_date < timezone.localdate()
             ):
 
-                log_auth.info("login failed due to expired profile validity | email=%s", email)
+                log_auth.info("login failed due to missing/expired profile validity | email=%s", email)
                 raise PermissionDenied(
-                    "Your profile validity has ended. Contact admin for renewal."
+                    "Your profile validity is missing or has expired. Contact admin for renewal."
                 )
 
         # A new session invalidates tokens issued to any other device.

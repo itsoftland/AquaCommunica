@@ -313,6 +313,7 @@ class DashboardView(APIView):
                 total_parent_user_slot_available = profile.parent_user_count
                 total_child_user_slot_available = profile.child_user_count
                 total_device_slot_available = profile.total_device_count
+                validity_date = profile.validity_to_date
     
                 total_users_slot_remaning = (total_users_slot_available - 0)
                 total_parent_user_slot_remaning = (total_parent_user_slot_available - 0)
@@ -331,6 +332,7 @@ class DashboardView(APIView):
                     "parent_user_slot_remaining": total_parent_user_slot_remaning,
                     "child_user_slot_remaining": total_child_user_slot_remaning,
                     "device_slot_remaining": total_device_slot_remaning,
+                    "validity_date": validity_date,
                 }
             else:
                 profile_data = {}
@@ -386,6 +388,7 @@ class DashboardView(APIView):
             total_parent_user_slot_available = profile.parent_user_count
             total_child_user_slot_available = profile.child_user_count
             total_device_slot_available = profile.total_device_count
+            validity_date = profile.validity_to_date
 
             total_users_slot_remaning = (total_users_slot_available - total_users)
             total_parent_user_slot_remaning = (total_parent_user_slot_available - total_parent_user)
@@ -414,6 +417,7 @@ class DashboardView(APIView):
                         "parent_user_slot_remaining": total_parent_user_slot_remaning,
                         "child_user_slot_remaining": total_child_user_slot_remaning,
                         "device_slot_remaining": total_device_slot_remaning,
+                        "validity_date": validity_date,
                     },
                 },
             )
@@ -429,7 +433,31 @@ class DashboardView(APIView):
             PARENT,
             CHILD
         ]:
+
+            main_user = user.user_admin
+
+            if not main_user:
+
+                return error_response(
+                    message="dont assigned any user admin. contact admin",
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            profile = main_user.user_profile
+
+            if not profile:
+
+                return error_response(
+                    message="we cant any profile with your admin user. contact customer care",
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            validity_date = profile.validity_to_date
+
+
             return success_response(
                 message="Dashboard stats fetched successfully",
-                data={},
+                data={
+                    "validity_date": validity_date,
+                },
             )
