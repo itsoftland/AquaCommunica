@@ -77,7 +77,7 @@ const PROFILE_FIELDS = [
     ["phone_number", "Phone Number"],
     ["contact_email", "Contact Email"],
     ["address", "Address"],
-    ["city", "City"],
+    ["district", "District"],
     ["state", "State"],
     ["pincode", "Pincode"],
     ["gst_number", "GST Number"],
@@ -440,7 +440,7 @@ async function loadCustomers(url = currentUrl) {
             p.profile_id,
             [p.first_name, p.last_name].filter(Boolean).join(" "),
             p.user_email,
-            p.city,
+            p.district,
             p.total_device_count,
             p.validity_from_date,
             p.validity_to_date,
@@ -505,7 +505,7 @@ async function loadCustomers(url = currentUrl) {
                     <th>Profile ID</th>
                     <th>Name</th>
                     <th>Email</th>
-                    <th>City</th>
+                    <th>District</th>
                     <th>Devices</th>
                     <th>Valid From</th>
                     <th>Valid Till</th>
@@ -577,7 +577,7 @@ async function loadCustomers(url = currentUrl) {
             <label>Phone Number<input type="text" name="phone_number"></label>
             <label>Contact Email<input type="email" name="contact_email"></label>
             <label>Address<input type="text" name="address"></label>
-            <label>City<input type="text" name="city"></label>
+            <label>District<input type="text" name="district"></label>
             <label>State<input type="text" name="state"></label>
             <label>Pincode<input type="text" name="pincode"></label>
             <label>GST Number<input type="text" name="gst_number"></label>
