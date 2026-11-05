@@ -1,3 +1,4 @@
+import datetime
 import logging
 
 from rest_framework.views import APIView
@@ -285,6 +286,29 @@ class ListUsers(APIView):
         user = request.user
 
         users_list = user_list(user).select_related('dealer', 'created_by', 'user_profile')
+
+        params = request.query_params
+
+        role = params.get("role")
+        if role:
+            users_list = users_list.filter(role=role)
+
+        verified = params.get("is_verified")
+        if verified in ("true", "false"):
+            users_list = users_list.filter(is_verified=(verified == "true"))
+
+        active = params.get("is_active")
+        if active in ("true", "false"):
+            users_list = users_list.filter(is_active=(active == "true"))
+
+        created_at = params.get("created_at")
+        if created_at:
+            try:
+                users_list = users_list.filter(
+                    created_at__date=datetime.date.fromisoformat(created_at)
+                )
+            except ValueError:
+                pass
 
         paginator = CustomPagination()
 

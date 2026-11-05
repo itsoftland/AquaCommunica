@@ -246,6 +246,21 @@ const LIST_URL = "{% url 'users_list' %}";
 let currentUrl = LIST_URL;
 let prevUrl = null, nextUrl = null, pageSize = 0;
 
+function applyFilters() {
+    const params = new URLSearchParams();
+    [["f-role", "role"], ["f-verified", "is_verified"], ["f-status", "is_active"], ["f-created", "created_at"]]
+        .forEach(([id, name]) => {
+            const v = document.getElementById(id).value;
+            if (v) params.set(name, v);
+        });
+    const qs = params.toString();
+    loadUsers(LIST_URL + (qs ? "?" + qs : ""));
+}
+function clearFilters() {
+    ["f-role", "f-verified", "f-status", "f-created"].forEach(id => { document.getElementById(id).value = ""; });
+    applyFilters();
+}
+
 async function loadUsers(url = currentUrl) {
     const body = document.getElementById("user-body");
     const cols = 10;
@@ -355,6 +370,35 @@ async function loadUsers(url = currentUrl) {
     <div class="page-head">
         <h1>Users</h1>
         <button type="button" class="btn-add" onclick="openAddUser()">+ Add User</button>
+    </div>
+    <div class="filter-bar">
+        <label>Role
+            <select id="f-role" onchange="applyFilters()">
+                <option value="">All</option>
+                <option value="executive">Executive</option>
+                <option value="dealer">Dealer</option>
+                <option value="production">Production</option>
+                <option value="user_admin">User Admin</option>
+            </select>
+        </label>
+        <label>Verified
+            <select id="f-verified" onchange="applyFilters()">
+                <option value="">All</option>
+                <option value="true">Verified</option>
+                <option value="false">Unverified</option>
+            </select>
+        </label>
+        <label>Status
+            <select id="f-status" onchange="applyFilters()">
+                <option value="">All</option>
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+            </select>
+        </label>
+        <label>Created At
+            <input type="date" id="f-created" onchange="applyFilters()">
+        </label>
+        <button type="button" class="action-btn" onclick="clearFilters()">Clear</button>
     </div>
     <div class="customer-table-wrap">
         <table class="customer-table">
@@ -488,6 +532,14 @@ async function loadUsers(url = currentUrl) {
 .action-btn.action-key:hover:not(:disabled) { background: none; border: none; color: #065e68; transform: scale(1.2); }
 .action-key svg { transform: scaleX(-1); }
 .pager { background: #fff; width: fit-content; margin: 14px auto 0; padding: 4px 14px; border-radius: 999px; box-shadow: 0 2px 8px rgba(31,41,51,.08); font-weight: 600; color: #5b5bd6; }
+.filter-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin-bottom: 14px; padding: 14px 18px; background: linear-gradient(135deg, #ffffff, #f4f0ff); border: 1px solid #d6e4f0; border-left: 5px solid #5b5bd6; border-radius: 12px; box-shadow: 0 2px 10px rgba(91,91,214,.10); }
+.filter-bar::before { content: "Filters"; align-self: center; font-weight: 800; font-size: .85rem; letter-spacing: .06em; text-transform: uppercase; background: linear-gradient(90deg, #087f8c, #5b5bd6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.filter-bar label { display: flex; flex-direction: column; font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #5b5bd6; gap: 5px; }
+.filter-bar select, .filter-bar input { padding: 8px 12px; border: 1.5px solid #d3d9f5; border-radius: 999px; font-size: .9rem; color: #1f2933; background: #fff; min-width: 150px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.filter-bar select:hover, .filter-bar input:hover { border-color: #5b5bd6; }
+.filter-bar select:focus, .filter-bar input:focus { outline: 0; border-color: #5b5bd6; box-shadow: 0 0 0 3px rgba(91,91,214,.18); }
+.filter-bar .action-btn { padding: 8px 18px; border-color: #b42318; color: #b42318; background: #fff; }
+.filter-bar .action-btn:hover:not(:disabled) { background: linear-gradient(135deg, #ef4444, #b42318); border-color: transparent; color: #fff; }
 @media (max-width: 768px) {
     body { padding-left: 0; }
     .page-head { flex-wrap: wrap; gap: 10px; }
