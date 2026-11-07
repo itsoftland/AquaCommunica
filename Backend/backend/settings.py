@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     # Custom apps
     'apps.core.apps.CoreConfig',
     'apps.frontend.apps.FrontendConfig',
+    'apps.production_apk.apps.ProductionApkConfig',
 ]
 
 # custom user model

@@ -22,4 +22,5 @@ urlpatterns = [
     path('AQUACOMMUNICA/web/core/', include('apps.core.urls')),
     path('AQUACOMMUNICA/license-server/', include('apps.core.license_urls')),
     path('AQUACOMMUNICA/', include('apps.frontend.urls')),
+    path('AQUACOMMUNICA/apk-1/', include('apps.production_apk.urls')),
 ]
