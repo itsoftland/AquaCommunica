@@ -1,7 +1,11 @@
 from django.urls import path
-from .views.apk.auth import ProductionLoginView
+from .views.apk import auth, device
 
 
 urlpatterns = [
-    path('login/', ProductionLoginView.as_view(), name="production-apk-login"),
+    # production user login
+    path('login/', auth.ProductionLoginView.as_view(), name="production-apk-login"),
+
+    # device
+    path('register-device/', device.RegisterDeviceView.as_view(), name='register_device'),
 ]
