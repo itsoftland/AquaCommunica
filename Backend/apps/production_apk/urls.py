@@ -1,7 +1,7 @@
 from django.urls import path
-from . import views
+from .views.apk.auth import ProductionLoginView
 
 
 urlpatterns = [
-    path('demo/', views.demo, name="demo"),
+    path('login/', ProductionLoginView.as_view(), name="production-apk-login"),
 ]
