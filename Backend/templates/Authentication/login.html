@@ -214,6 +214,32 @@
         animation: pop-in .2s ease-out;
     }
 
+
+    /* Force-logout confirmation modal */
+    .session-modal {
+        position: fixed; inset: 0; z-index: 1000; display: none;
+        align-items: center; justify-content: center; padding: 16px;
+        background: rgba(15, 30, 40, .55); backdrop-filter: blur(2px);
+    }
+    .session-modal.open { display: flex; animation: fade-in .2s ease-out; }
+    .session-modal-box {
+        width: 100%; max-width: 400px; background: #fff; border-radius: 12px;
+        padding: 26px 24px 20px; text-align: center; color: var(--ink);
+        box-shadow: 0 20px 50px rgba(0,0,0,.3); animation: slide-up .3s ease-out;
+    }
+    .session-modal-icon { font-size: 2.2rem; line-height: 1; margin-bottom: 8px; }
+    .session-modal-box h3 { margin: 0 0 8px; font-size: 1.2rem; }
+    .session-modal-box p { margin: 0 0 20px; color: var(--muted); line-height: 1.5; font-size: .95rem; }
+    .session-modal-actions { display: flex; gap: 10px; }
+    .session-modal-actions button {
+        flex: 1; padding: 10px; border-radius: 6px; font-size: .95rem; cursor: pointer;
+        border: 1px solid var(--line); background: #fff; color: var(--ink);
+    }
+    .session-modal-actions button.confirm { background: var(--brand); border-color: var(--brand); color: #fff; }
+    .session-modal-actions button.confirm:hover { background: var(--brand-dark); }
+    .session-modal-actions button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
     /* Submit button */
     .login-card button[type="submit"] {
         width: 100%; padding: 11px; border: 0; border-radius: 6px;
@@ -312,6 +338,18 @@
             <span class="spinner"></span><span id="login-btn-text">Login</span>
         </button>
     </form>
+    </div>
+</div>
+
+<div class="session-modal" id="session-modal" role="dialog" aria-modal="true" aria-labelledby="session-modal-title">
+    <div class="session-modal-box">
+        <div class="session-modal-icon">⚠️</div>
+        <h3 id="session-modal-title">Already logged in</h3>
+        <p>This account is already logged in on another device. Log out from that device and continue here?</p>
+        <div class="session-modal-actions">
+            <button type="button" id="session-cancel">Cancel</button>
+            <button type="button" class="confirm" id="session-confirm">Log out other device</button>
+        </div>
     </div>
 </div>
 
@@ -567,10 +605,37 @@
     pwInput.addEventListener("blur", () => { capsHint.style.display = "none"; });
 
     /* ----- Submit ----- */
+    let forceLogin = false;
+
+    /* ----- Force-logout modal (resolves true on confirm, false on cancel) ----- */
+    const sessionModal = document.getElementById("session-modal");
+    const sessionConfirm = document.getElementById("session-confirm");
+    const sessionCancel = document.getElementById("session-cancel");
+
+    function askForceLogout() {
+        return new Promise((resolve) => {
+            const close = (result) => {
+                sessionModal.classList.remove("open");
+                sessionConfirm.onclick = sessionCancel.onclick = sessionModal.onclick = null;
+                document.removeEventListener("keydown", onKey);
+                resolve(result);
+            };
+            const onKey = (e) => { if (e.key === "Escape") close(false); };
+            sessionConfirm.onclick = () => close(true);
+            sessionCancel.onclick = () => close(false);
+            sessionModal.onclick = (e) => { if (e.target === sessionModal) close(false); };
+            document.addEventListener("keydown", onKey);
+            sessionModal.classList.add("open");
+            sessionCancel.focus();
+        });
+    }
+
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
         clearError();
 
+        const force = forceLogin;
+        forceLogin = false;
         const email    = form.email.value.trim();
         const password = form.password.value;
         const emailOk  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -589,9 +654,20 @@
             const res = await fetch("{% url 'login' %}", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({ email, password, force }),
             });
             const body = await res.json().catch(() => ({}));
+
+            if (res.status === 409 && body.code === "session_active") {
+                const ok = await askForceLogout();
+                if (ok) {
+                    forceLogin = true;
+                    form.requestSubmit();
+                } else {
+                    showError("Login cancelled. The other device is still logged in.");
+                }
+                return;
+            }
 
             if (!res.ok) {
                 const details = body.errors

@@ -5,7 +5,7 @@ from django.db.models import Count, When, Case, IntegerField
 from django.utils import timezone
 
 from rest_framework import serializers
-from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, APIException
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
@@ -17,6 +17,17 @@ from ..models.customuser import CustomUser
 log_auth = logging.getLogger('aquacommunica.authlog')
 
 
+class SessionAlreadyActive(APIException):
+    """Raised when the account is already logged in on another device."""
+
+    status_code = 409
+    default_code = "session_active"
+    default_detail = {
+        "detail": "This account is already logged in on another device.",
+        "code": "session_active",
+    }
+
+
 class LoginSerializer(serializers.Serializer):
 
     email = serializers.EmailField()
@@ -24,6 +35,8 @@ class LoginSerializer(serializers.Serializer):
         write_only=True,
         style={"input_type": 'password'}
     )
+    # Set to true once the user confirms logging out the other device.
+    force = serializers.BooleanField(required=False, default=False)
 
     def validate(self, attrs):
         email = attrs.get("email")
@@ -91,6 +104,11 @@ class LoginSerializer(serializers.Serializer):
                 raise PermissionDenied(
                     "Your profile validity is missing or has expired. Contact admin for renewal."
                 )
+
+        # Already logged in elsewhere: ask the caller to confirm first.
+        if user.session_id and not attrs.get("force"):
+            log_auth.info("login blocked, session already active | email=%s", email)
+            raise SessionAlreadyActive()
 
         # A new session invalidates tokens issued to any other device.
         session_id = user.start_new_session()

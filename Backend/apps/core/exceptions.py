@@ -18,6 +18,8 @@ def custom_exception_handler(exc, context):
             "message": str(data["detail"]),
             "errors": None,
         }
+        if "code" in data:
+            response.data["code"] = data["code"]
 
         return response
 
