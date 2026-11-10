@@ -18,3 +18,7 @@ def dealer_Page(request):
 
 def user_page(request):
     return render(request, "Users/users.html")
+
+
+def device_page(request):
+    return render(request, "Devices/devices.html")
