@@ -4,6 +4,8 @@ from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
+from django.db.models import Sum
+
 from ...utlis.responses import success_response, error_response
 from ...utlis.audit import record_audit
 from apps.core.models.audit import AuditLog
@@ -14,6 +16,7 @@ from apps.core.serializers.auth import (
 )
 from ...models.customuser import CustomUser
 from ...models.profiles import UserProfile, DealerProfile
+from ...models.device import Devices
 
 log_auth = logging.getLogger('aquacommunica.authlog')
 
@@ -314,12 +317,53 @@ class DashboardView(APIView):
                 total_child_user_slot_available = profile.child_user_count
                 total_device_slot_available = profile.total_device_count
                 validity_date = profile.validity_to_date
+
+                device_bq = Devices.objects.select_related(
+                    'user_profile',
+                    'dealer_profile',
+                    'created_by',
+                )
+                assigned_device_count = device_bq.filter(
+                    dealer_profile=user.dealer_profile
+                ).count()
+
+                user_profile_bq = UserProfile.objects.select_related(
+                    'dealer',
+                    'created_by'
+                ).prefetch_related(
+                    'user'
+                )
+
+                customers_created_by_dealer = user_profile_bq.filter(
+                    dealer=user.dealer_profile.user
+                )
+
+                total_licence_unit = customers_created_by_dealer.aggregate(
+                    total=Sum('total_licence_unit')
+                )['total'] or 0
+
+                total_user = customers_created_by_dealer.aggregate(
+                    total=Sum('total_user_count')
+                )['total'] or 0
+
+                total_parent = customers_created_by_dealer.aggregate(
+                    total=Sum('parent_user_count')
+                )['total'] or 0
+
+                total_child = customers_created_by_dealer.aggregate(
+                    total=Sum('child_user_count')
+                )['total'] or 0
+
+                total_device = customers_created_by_dealer.aggregate(
+                    total=Sum('total_device_count')
+                )['total'] or 0
+
     
-                total_users_slot_remaning = (total_users_slot_available - 0)
-                total_parent_user_slot_remaning = (total_parent_user_slot_available - 0)
-                total_child_user_slot_remaning = (total_child_user_slot_available - 0)
-                total_device_slot_remaning = (total_device_slot_available - 0)
-                total_license_unit_remaning = (total_license_unit - (total_customers + 0))
+                total_users_slot_remaning = (total_users_slot_available - total_user)
+                total_parent_user_slot_remaning = (total_parent_user_slot_available - total_parent)
+                total_child_user_slot_remaning = (total_child_user_slot_available - total_child)
+                total_device_slot_remaning = (total_device_slot_available - total_device)
+                total_license_unit_remaning = (total_license_unit - total_licence_unit)
 
                 profile_data = {
                     "total_license_unit": total_license_unit,
@@ -366,7 +410,8 @@ class DashboardView(APIView):
                     PARENT,
                     CHILD
                 ],
-                created_by=user
+                created_by=user,
+                is_active=True,
             ).count()
             total_parent_user = users.filter(
                 role=PARENT,
@@ -390,11 +435,21 @@ class DashboardView(APIView):
             total_device_slot_available = profile.total_device_count
             validity_date = profile.validity_to_date
 
+            device_bq = Devices.objects.select_related(
+                'user_profile',
+                'dealer_profile',
+                'created_by',
+            )
+            assigned_device_count = device_bq.filter(
+                user_profile=user.user_profile
+            ).count()
+
+
             total_users_slot_remaning = (total_users_slot_available - total_users)
             total_parent_user_slot_remaning = (total_parent_user_slot_available - total_parent_user)
             total_child_user_slot_remaning = (total_child_user_slot_available - total_child_user)
-            total_device_slot_remaning = (total_device_slot_available - 0)
-            total_license_unit_remaning = (total_license_unit - (total_users + 0))
+            total_device_slot_remaning = (total_device_slot_available - assigned_device_count)
+            total_license_unit_remaning = (total_license_unit - (total_users + assigned_device_count))
 
             return success_response(
                 message="Dashboard stats fetched successfully",
