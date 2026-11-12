@@ -28,6 +28,7 @@ urlpatterns = [
 
     # device urls
     path('list-devices/', device.DeviceListingView.as_view(), name="devices_list"),
+    path('customer-device-assign/', device.AssignDevicetoCustomer.as_view(), name="customer_device_assign"),
 
     # audit logs (superadmin only)
     path('audit-logs/', audit.AuditLogListView.as_view(), name="audit_logs"),
