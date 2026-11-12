@@ -41,6 +41,8 @@
         if (!["superadmin", "user_admin", "executive", "dealer"].includes(body.data.user.role)) {
             return window.location.replace("{% url 'dashboard' %}");
         }
+        currentRole = body.data.user.role;
+        if (ASSIGN_ROLES.includes(currentRole)) document.getElementById("assign-open-btn").hidden = false;
     } catch (_) {
         return toLogin();
     }
@@ -48,6 +50,8 @@
     applyFilters();
 })();
 
+const ASSIGN_ROLES = ["superadmin", "executive", "dealer"];
+let currentRole = null;
 let prevUrl = null, nextUrl = null, searchTimer = null;
 const COLS = 7;
 
@@ -123,12 +127,110 @@ async function loadDevices(url) {
     }
     document.getElementById("result-info").textContent = d.results.length + " devices on this page";
 }
+
+const authHdr = () => ({ "Authorization": "Bearer " + localStorage.getItem("access_token") });
+
+async function fetchAll(url) {
+    const out = [];
+    while (url) {
+        const r = await fetch(url, { headers: authHdr() });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.data) throw new Error("load failed");
+        out.push(...j.data.results);
+        url = j.data.next;
+    }
+    return out;
+}
+
+function asgError(msg) {
+    const e = document.getElementById("asg-error");
+    e.textContent = msg || "";
+    e.hidden = !msg;
+}
+
+async function openAssignModal() {
+    if (!ASSIGN_ROLES.includes(currentRole)) return;
+    asgError("");
+    document.getElementById("asg-count").textContent = "0 selected";
+    document.getElementById("asg-modal").hidden = false;
+    const sel = document.getElementById("asg-customer");
+    const list = document.getElementById("asg-devices");
+    sel.innerHTML = '<option value="">Loading...</option>';
+    list.textContent = "Loading...";
+    const alloc = currentRole === "dealer" ? "assigned_to_dealer" : "stock";
+    try {
+        const [customers, devices] = await Promise.all([
+            fetchAll("{% url 'users_list' %}?role=user_admin&is_active=true"),
+            fetchAll("{% url 'devices_list' %}?allocation_status=" + alloc),
+        ]);
+        sel.innerHTML = '<option value="">Select customer</option>';
+        customers.forEach(c => {
+            const o = document.createElement("option");
+            o.value = c.id;
+            o.textContent = c.email;
+            sel.appendChild(o);
+        });
+        list.innerHTML = "";
+        const free = devices.filter(d => !d.user_profile);
+        if (!free.length) list.textContent = "No devices available for assignment.";
+        free.forEach(d => {
+            const l = document.createElement("label");
+            l.className = "asg-item";
+            const cb = document.createElement("input");
+            cb.type = "checkbox";
+            cb.value = d.serial_number;
+            const sm = document.createElement("small");
+            sm.textContent = d.device_type_display || d.device_type;
+            l.append(cb, d.serial_number, sm);
+            list.appendChild(l);
+        });
+    } catch (_) {
+        sel.innerHTML = '<option value="">Select customer</option>';
+        list.textContent = "";
+        asgError("Unable to load customers or devices.");
+    }
+}
+document.addEventListener("change", (e) => {
+    if (!e.target.closest || !e.target.closest("#asg-devices")) return;
+    document.getElementById("asg-count").textContent = document.querySelectorAll("#asg-devices input:checked").length + " selected";
+});
+function closeAssignModal() { document.getElementById("asg-modal").hidden = true; }
+
+async function submitAssign(ev) {
+    ev.preventDefault();
+    asgError("");
+    const customer = document.getElementById("asg-customer").value;
+    const serials = [...document.querySelectorAll("#asg-devices input:checked")].map(i => i.value);
+    if (!customer) return asgError("Please select a customer.");
+    if (!serials.length) return asgError("Select at least one device.");
+    const btn = document.getElementById("asg-submit");
+    btn.disabled = true;
+    try {
+        const res = await fetch("{% url 'customer_device_assign' %}", {
+            method: "POST",
+            headers: { ...authHdr(), "Content-Type": "application/json" },
+            body: JSON.stringify({ customer_id: Number(customer), serial_number: serials }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            const bad = j.data && j.data.invalid_serial_numbers;
+            return asgError((j.message || "Assignment failed.") + (bad && bad.length ? " Unavailable: " + bad.join(", ") : ""));
+        }
+        closeAssignModal();
+        applyFilters();
+    } catch (_) {
+        asgError("Network error. Please try again.");
+    } finally {
+        btn.disabled = false;
+    }
+}
 </script>
 
 {% include "nav/nav.html" %}
 <div class="customer-page">
     <div class="page-head">
         <h1>Devices</h1>
+        <button type="button" id="assign-open-btn" class="action-btn" onclick="openAssignModal()" hidden>Assign Device to Customer</button>
     </div>
     <div class="filter-bar">
         <label class="search-label">Search
@@ -237,5 +339,59 @@ async function loadDevices(url) {
     .page-head { flex-wrap: wrap; gap: 10px; }
 }
 .badge-grey { background: #eef1f5; color: #52606d; }
+</style>
+<div id="asg-modal" class="modal-overlay" hidden onclick="if (event.target === this) closeAssignModal()">
+    <div class="modal">
+        <div class="modal-head">
+            <h2>Assign Device to Customer</h2>
+            <button type="button" class="modal-close" onclick="closeAssignModal()" aria-label="Close">&times;</button>
+        </div>
+        <p class="asg-sub">Choose a customer and the devices to assign to them.</p>
+        <form id="asg-form" onsubmit="submitAssign(event)" novalidate>
+            <label class="asg-field">Customer
+                <select id="asg-customer"></select>
+            </label>
+            <div class="asg-label-row">Devices <span class="asg-count" id="asg-count">0 selected</span></div>
+            <div id="asg-devices" class="asg-list"></div>
+            <div id="asg-error" class="asg-err" role="alert" hidden></div>
+            <div class="asg-actions">
+                <button type="button" class="asg-btn ghost" onclick="closeAssignModal()">Cancel</button>
+                <button type="submit" class="asg-btn primary" id="asg-submit">Assign</button>
+            </div>
+        </form>
+    </div>
+</div>
+<style>
+.modal-overlay { position: fixed; inset: 0; background: rgba(11,42,63,.38); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+.modal-overlay[hidden], #assign-open-btn[hidden] { display: none; }
+.modal { background: #fff; border-radius: 16px; padding: 26px 26px 22px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 60px rgba(2,62,138,.18), 0 2px 8px rgba(11,42,63,.08); border: 1px solid #e6edf3; animation: asgIn .18s ease-out; }
+@keyframes asgIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.modal-head h2 { margin: 0; font-size: 1.25rem; font-weight: 700; color: #0b2a3f; }
+.modal-close { width: 32px; height: 32px; border: 0; border-radius: 50%; background: #f3f6f9; font-size: 1.3rem; line-height: 1; cursor: pointer; color: #667; transition: background .15s, color .15s; }
+.modal-close:hover { background: #e6f2fa; color: #0077b6; }
+.asg-sub { margin: 0 0 18px; color: #667; font-size: .88rem; }
+.asg-field { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: .82rem; color: #0b2a3f; margin-bottom: 14px; }
+.asg-field select { padding: 11px 12px; border: 1.5px solid #dbe3ea; border-radius: 10px; font-size: .95rem; color: #0b2a3f; background: #fbfcfd; cursor: pointer; transition: border-color .15s, box-shadow .15s, background .15s; }
+.asg-field select:hover { border-color: #0077b6; }
+.asg-field select:focus { outline: none; border-color: #0077b6; background: #fff; box-shadow: 0 0 0 3px rgba(0,119,182,.14); }
+.asg-label-row { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: .82rem; color: #0b2a3f; margin-bottom: 6px; }
+.asg-count { font-weight: 600; font-size: .75rem; color: #0077b6; background: rgba(0,119,182,.10); padding: 2px 10px; border-radius: 999px; }
+.asg-list { max-height: 250px; overflow-y: auto; border: 1.5px solid #e6edf3; border-radius: 12px; padding: 6px; background: #fbfcfd; color: #667; font-size: .9rem; scrollbar-width: thin; }
+.asg-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; color: #0b2a3f; cursor: pointer; border: 1px solid transparent; transition: background .12s, border-color .12s; }
+.asg-item:hover { background: #f0f7fc; }
+.asg-item input { width: 16px; height: 16px; accent-color: #0077b6; cursor: pointer; }
+.asg-item:has(input:checked) { background: rgba(0,119,182,.08); border-color: rgba(0,119,182,.35); font-weight: 600; }
+.asg-item small { margin-left: auto; color: #667; font-weight: 500; font-size: .75rem; }
+.asg-err { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: #fdecea; color: #b3261e; font-size: .85rem; border-left: 3px solid #b3261e; }
+.asg-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.asg-btn { padding: 10px 22px; border-radius: 10px; font-size: .92rem; font-weight: 600; cursor: pointer; transition: all .15s; }
+.asg-btn.ghost { background: #fff; border: 1.5px solid #dbe3ea; color: #0b2a3f; }
+.asg-btn.ghost:hover { border-color: #0077b6; color: #0077b6; }
+.asg-btn.primary { background: #0077b6; border: 1.5px solid #0077b6; color: #fff; box-shadow: 0 2px 8px rgba(0,119,182,.25); }
+.asg-btn.primary:hover:not(:disabled) { background: #023e8a; border-color: #023e8a; transform: translateY(-1px); }
+.asg-btn:disabled { opacity: .6; cursor: progress; }
+#assign-open-btn { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1.5px solid #0077b6; color: #0077b6; padding: 9px 18px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,119,182,.12); }
+#assign-open-btn:hover:not(:disabled) { background: #0077b6; color: #fff; }
 </style>
 {% endblock %}
