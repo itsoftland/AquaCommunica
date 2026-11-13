@@ -11,7 +11,7 @@ from ...serializers.device import DeviceListSerializer
 from ...utlis.responses import success_response, error_response
 from ...pagination import CustomPagination
 from ...models.customuser import CustomUser
-from ...models.profiles import UserProfile
+from ...models.profiles import UserProfile, DealerProfile
 from ...models.device import Devices, AllocationStatus
 from ...models.audit import AuditLog
 from ...utlis.audit import record_audit
@@ -416,8 +416,240 @@ class AssignDevicetoDealer(APIView):
         IsSuperAdmin
     ]
 
-    def post(self):
+    def post(self, request):
 
-        return success_response(
-            message="haiii"
-        )
+        user = request.user
+
+        customer_id = get_customer_id_from_request(request)
+        serial_numbers = get_serial_numbers_from_request(request)
+
+        with transaction.atomic():
+
+            try:
+                dealer = CustomUser.objects.select_related(
+                    'created_by'
+                ).get(
+                    id=customer_id,
+                    role=CustomUser.Role.DEALER
+                )
+
+            except CustomUser.DoesNotExist:
+
+                action_log.warning(
+                    "Assign device failed: customer not found "
+                    "user=%s customer_id=%s",
+                    user.id,
+                    customer_id,
+                )
+
+                return error_response(
+                    message="Customer not found",
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            try:
+              
+                dealer_profile = dealer.dealer_profile
+                dealer_profile = DealerProfile.objects.select_for_update().get(
+                    pk=dealer_profile.pk
+                )
+
+            except (DealerProfile.DoesNotExist, ObjectDoesNotExist):
+
+                action_log.warning(
+                    "Assign device failed: profile not found "
+                    "user=%s dealer=%s",
+                    user.id,
+                    dealer.id,
+                )
+
+                return error_response(
+                    message="Dealer profile does not exist",
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            except Exception as e:
+                action_log.exception(
+                    "Assign device failed: unable to load dealer profile "
+                    "user=%s dealer_id=%s",
+                    user.id,
+                    request.data.get("customer_id"),
+                )
+
+                return error_response(
+                    message="Unable to load dealer profile",
+                    data=f"Error:- {e}",
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            available_devices = get_available_devices(user)
+
+            devices = list(
+                available_devices.select_for_update().filter(
+                    serial_number__in=serial_numbers
+                )
+            )
+
+            available_serial_numbers = {
+                device.serial_number
+                for device in devices
+            }
+
+            invalid_serial_numbers = sorted(
+                set(serial_numbers) - available_serial_numbers
+            )
+
+            if not devices:
+           
+                action_log.warning(
+                    "Assign device failed: no available devices "
+                    "user=%s dealer=%s invalid=%s",
+                    user.id,
+                    dealer.id,
+                    invalid_serial_numbers,
+                )
+
+                return error_response(
+                    message="None of the provided serial numbers are available for assignment",
+                    data={
+                        "invalid_serial_numbers": invalid_serial_numbers,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            total_device_count = (
+                dealer_profile.total_device_count or 0
+            )
+
+            total_devices_using = Devices.objects.filter(
+                dealer_profile=dealer_profile,
+            ).count()
+
+            remaining_device_count = (
+                total_device_count - total_devices_using
+            )
+
+            if remaining_device_count <= 0:
+            
+                action_log.warning(
+                    "Assign device failed: device limit reached "
+                    "user=%s dealer=%s",
+                    user.id,
+                    dealer.id,
+                )
+
+                return error_response(
+                    message="Device limit reached. No remaining devices available for this dealer.",
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if len(devices) > remaining_device_count:
+            
+                action_log.warning(
+                    "Assign device failed: device limit exceeded "
+                    "user=%s dealer=%s remaining=%s requested=%s",
+                    user.id,
+                    dealer.id,
+                    remaining_device_count,
+                    len(devices),
+                )
+
+                return error_response(
+                    message=(
+                        f"Device limit exceeded. Only "
+                        f"{remaining_device_count} device(s) remaining "
+                        f"for this dealer, but {len(devices)} "
+                        f"were requested."
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            assigned_serial_numbers = []
+            
+            for device in devices:
+
+                old_values = {
+                    "allocation_status": device.allocation_status,
+                    "user_profile": device.user_profile_id,
+                    "dealer_profile": device.dealer_profile_id,
+                }
+
+                device.dealer_profile = dealer_profile
+                device.is_active = False
+                device.allocation_status = AllocationStatus.DEALER
+
+                device.save(
+                    update_fields=[
+                        "allocation_status",
+                        "dealer_profile",
+                        "is_active",
+                    ]
+                )
+
+            record_audit(
+                request,
+                AuditLog.Action.UPDATE,
+                user=user,
+                instance=device,
+                description=(
+                    f"Device {device.serial_number} "
+                    f"assigned to customer {dealer.id}"
+                ),
+                old_values=old_values,
+                new_values={
+                    "allocation_status": device.allocation_status,
+                    "user_profile": device.user_profile_id,
+                    "dealer_id": dealer.id,
+                },
+            )
+
+            assigned_serial_numbers.append(
+                device.serial_number
+            )
+
+            assigned_serial_numbers.sort()
+            
+            remaining_device_count -= len(
+                assigned_serial_numbers
+            )
+
+            message = (
+                f"{len(assigned_serial_numbers)} device(s) "
+                "assigned to dealer successfully"
+            )
+
+            if invalid_serial_numbers:
+
+                message += (
+                    f". {len(invalid_serial_numbers)} "
+                    "serial number(s) could not be assigned"
+                )
+
+            action_log.info(
+                "User %s assigned %s device(s) to dealer %s: %s",
+                user.id,
+                len(assigned_serial_numbers),
+                dealer.id,
+                assigned_serial_numbers,
+            )
+
+            if invalid_serial_numbers:
+            
+                action_log.warning(
+                    "Partial device assignment: user=%s "
+                    "dealer=%s invalid=%s",
+                    user.id,
+                    dealer.id,
+                    invalid_serial_numbers,
+                )
+
+ 
+            return success_response(
+                message=message,
+                data={
+                    "dealer_id": dealer.id,
+                    "assigned_serial_numbers": assigned_serial_numbers,
+                    "invalid_serial_numbers": invalid_serial_numbers,
+                    "remaining_device_count": remaining_device_count,
+                },
+            )
