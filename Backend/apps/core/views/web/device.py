@@ -21,6 +21,7 @@ from ...services.devices import (
     get_customer_id_from_request,
     get_available_devices
 )
+from ...permissions import IsSuperAdmin
 
 
 action_log = logging.getLogger('aquacommunica.action.log')
@@ -407,3 +408,16 @@ class AssignDevicetoCustomer(APIView):
                 },
             )
 
+
+class AssignDevicetoDealer(APIView):
+
+    permission_classes = [
+        IsAuthenticated,
+        IsSuperAdmin
+    ]
+
+    def post(self):
+
+        return success_response(
+            message="haiii"
+        )
