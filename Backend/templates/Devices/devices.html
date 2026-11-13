@@ -43,6 +43,7 @@
         }
         currentRole = body.data.user.role;
         if (ASSIGN_ROLES.includes(currentRole)) document.getElementById("assign-open-btn").hidden = false;
+        if (currentRole === "superadmin") document.getElementById("assign-dealer-open-btn").hidden = false;
     } catch (_) {
         return toLogin();
     }
@@ -52,6 +53,7 @@
 
 const ASSIGN_ROLES = ["superadmin", "executive", "dealer"];
 let currentRole = null;
+let assignmentTarget = "customer";
 let prevUrl = null, nextUrl = null, searchTimer = null;
 const COLS = 7;
 
@@ -150,21 +152,37 @@ function asgError(msg) {
 
 async function openAssignModal() {
     if (!ASSIGN_ROLES.includes(currentRole)) return;
+    openAssignmentModal("customer");
+}
+
+async function openDealerAssignModal() {
+    if (currentRole !== "superadmin") return;
+    openAssignmentModal("dealer");
+}
+
+async function openAssignmentModal(target) {
+    assignmentTarget = target;
     asgError("");
     document.getElementById("asg-count").textContent = "0 selected";
     document.getElementById("asg-modal").hidden = false;
     const sel = document.getElementById("asg-customer");
     const list = document.getElementById("asg-devices");
+    const isDealer = target === "dealer";
+    document.querySelector("#asg-modal .modal-head h2").textContent = isDealer ? "Assign Device to Dealer" : "Assign Device to Customer";
+    document.querySelector("#asg-modal .asg-sub").textContent = isDealer
+        ? "Choose a dealer and the devices to assign to them."
+        : "Choose a customer and the devices to assign to them.";
+    document.querySelector("#asg-customer-label").textContent = isDealer ? "Dealer" : "Customer";
     sel.innerHTML = '<option value="">Loading...</option>';
     list.textContent = "Loading...";
-    const alloc = currentRole === "dealer" ? "assigned_to_dealer" : "stock";
+    const alloc = !isDealer && currentRole === "dealer" ? "assigned_to_dealer" : "stock";
     try {
-        const [customers, devices] = await Promise.all([
-            fetchAll("{% url 'users_list' %}?role=user_admin&is_active=true"),
+        const [users, devices] = await Promise.all([
+            fetchAll("{% url 'users_list' %}?role=" + (isDealer ? "dealer" : "user_admin") + "&is_active=true"),
             fetchAll("{% url 'devices_list' %}?allocation_status=" + alloc),
         ]);
-        sel.innerHTML = '<option value="">Select customer</option>';
-        customers.forEach(c => {
+        sel.innerHTML = '<option value="">Select ' + (isDealer ? "dealer" : "customer") + '</option>';
+        users.forEach(c => {
             const o = document.createElement("option");
             o.value = c.id;
             o.textContent = c.email;
@@ -185,9 +203,9 @@ async function openAssignModal() {
             list.appendChild(l);
         });
     } catch (_) {
-        sel.innerHTML = '<option value="">Select customer</option>';
+        sel.innerHTML = '<option value="">Select ' + (isDealer ? "dealer" : "customer") + '</option>';
         list.textContent = "";
-        asgError("Unable to load customers or devices.");
+        asgError("Unable to load " + (isDealer ? "dealers" : "customers") + " or devices.");
     }
 }
 document.addEventListener("change", (e) => {
@@ -199,17 +217,17 @@ function closeAssignModal() { document.getElementById("asg-modal").hidden = true
 async function submitAssign(ev) {
     ev.preventDefault();
     asgError("");
-    const customer = document.getElementById("asg-customer").value;
+    const assignee = document.getElementById("asg-customer").value;
     const serials = [...document.querySelectorAll("#asg-devices input:checked")].map(i => i.value);
-    if (!customer) return asgError("Please select a customer.");
+    if (!assignee) return asgError("Please select a " + (assignmentTarget === "dealer" ? "dealer." : "customer."));
     if (!serials.length) return asgError("Select at least one device.");
     const btn = document.getElementById("asg-submit");
     btn.disabled = true;
     try {
-        const res = await fetch("{% url 'customer_device_assign' %}", {
+        const res = await fetch(assignmentTarget === "dealer" ? "{% url 'dealer_device_assign' %}" : "{% url 'customer_device_assign' %}", {
             method: "POST",
             headers: { ...authHdr(), "Content-Type": "application/json" },
-            body: JSON.stringify({ customer_id: Number(customer), serial_number: serials }),
+            body: JSON.stringify({ customer_id: Number(assignee), serial_number: serials }),
         });
         const j = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -231,6 +249,7 @@ async function submitAssign(ev) {
     <div class="page-head">
         <h1>Devices</h1>
         <button type="button" id="assign-open-btn" class="action-btn" onclick="openAssignModal()" hidden>Assign Device to Customer</button>
+        <button type="button" id="assign-dealer-open-btn" class="action-btn" onclick="openDealerAssignModal()" hidden>Assign Device to Dealer</button>
     </div>
     <div class="filter-bar">
         <label class="search-label">Search
@@ -348,7 +367,7 @@ async function submitAssign(ev) {
         </div>
         <p class="asg-sub">Choose a customer and the devices to assign to them.</p>
         <form id="asg-form" onsubmit="submitAssign(event)" novalidate>
-            <label class="asg-field">Customer
+            <label class="asg-field"><span id="asg-customer-label">Customer</span>
                 <select id="asg-customer"></select>
             </label>
             <div class="asg-label-row">Devices <span class="asg-count" id="asg-count">0 selected</span></div>
@@ -363,7 +382,7 @@ async function submitAssign(ev) {
 </div>
 <style>
 .modal-overlay { position: fixed; inset: 0; background: rgba(11,42,63,.38); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
-.modal-overlay[hidden], #assign-open-btn[hidden] { display: none; }
+.modal-overlay[hidden], #assign-open-btn[hidden], #assign-dealer-open-btn[hidden] { display: none; }
 .modal { background: #fff; border-radius: 16px; padding: 26px 26px 22px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 60px rgba(2,62,138,.18), 0 2px 8px rgba(11,42,63,.08); border: 1px solid #e6edf3; animation: asgIn .18s ease-out; }
 @keyframes asgIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
