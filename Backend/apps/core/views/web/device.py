@@ -7,7 +7,6 @@ from rest_framework import status
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 
-from ...services.devices import get_all_devices
 from ...serializers.device import DeviceListSerializer
 from ...utlis.responses import success_response, error_response
 from ...pagination import CustomPagination
@@ -16,6 +15,12 @@ from ...models.profiles import UserProfile
 from ...models.device import Devices, AllocationStatus
 from ...models.audit import AuditLog
 from ...utlis.audit import record_audit
+from ...services.devices import (
+    get_all_devices, 
+    get_serial_numbers_from_request,
+    get_customer_id_from_request,
+    get_available_devices
+)
 
 
 action_log = logging.getLogger('aquacommunica.action.log')
@@ -114,39 +119,8 @@ class AssignDevicetoCustomer(APIView):
         # 2. Get request data
         # --------------------------------------------------
 
-        serial_numbers = request.data.get("serial_number")
-        customer_id = request.data.get("customer_id")
-
-        if not customer_id:
-
-            return error_response(
-                message="customer_id is required",
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not isinstance(serial_numbers, list) or not serial_numbers:
-
-            return error_response(
-                message="serial_number must be a non-empty list",
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # --------------------------------------------------
-        # 3. Validate and remove duplicate serial numbers
-        # --------------------------------------------------
-
-        serial_numbers = list(dict.fromkeys(
-            sn.strip()
-            for sn in serial_numbers
-            if isinstance(sn, str) and sn.strip()
-        ))
-
-        if not serial_numbers:
-
-            return error_response(
-                message="Please provide valid serial numbers",
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        customer_id = get_customer_id_from_request(request)
+        serial_numbers = get_serial_numbers_from_request(request)
 
         # --------------------------------------------------
         # 4. Start database transaction
@@ -222,21 +196,7 @@ class AssignDevicetoCustomer(APIView):
             # 7. Get available devices
             # --------------------------------------------------
 
-            if user.role == DEALER:
-
-                available_devices = Devices.objects.filter(
-                    dealer_profile=user.dealer_profile,
-                    user_profile__isnull=True,
-                    allocation_status=AllocationStatus.DEALER,
-                )
-
-            else:
-
-                available_devices = Devices.objects.filter(
-                    dealer_profile__isnull=True,
-                    user_profile__isnull=True,
-                    allocation_status=AllocationStatus.STOCK,
-                )
+            available_devices = get_available_devices(user)
 
             # --------------------------------------------------
             # 8. Lock requested available devices
