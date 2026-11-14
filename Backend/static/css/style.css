@@ -1,5 +1,5 @@
 body {
-    padding-left: 220px;
+    padding-left: 300px;
 }
 
 .sidebar {
@@ -7,7 +7,7 @@ body {
     top: 0;
     left: 0;
     bottom: 0;
-    width: 220px;
+    width: 300px;
     box-sizing: border-box;
     background: #087f8c;
     color: white;
