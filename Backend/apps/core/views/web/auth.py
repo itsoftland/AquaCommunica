@@ -16,7 +16,7 @@ from apps.core.serializers.auth import (
 )
 from ...models.customuser import CustomUser
 from ...models.profiles import UserProfile, DealerProfile
-from ...models.device import Devices
+from ...models.device import Devices, AllocationStatus
 
 log_auth = logging.getLogger('aquacommunica.authlog')
 
@@ -251,6 +251,23 @@ class DashboardView(APIView):
                 authentication_status=EXPIRED
             ).count()
 
+            device_bq = Devices.objects.select_related(
+                'user_profile',
+                'dealer_profile',
+                'created_by',
+            )
+
+            total_devices = device_bq.all().count()
+            devices_in_stock = device_bq.filter(
+                allocation_status=AllocationStatus.STOCK
+            ).count()
+            devices_assign_to_customer = device_bq.filter(
+                allocation_status=AllocationStatus.CUSTOMER
+            ).count()
+            devices_assign_to_dealer = device_bq.filter(
+                allocation_status=AllocationStatus.DEALER
+            ).count()
+
 
             return success_response(
                 message="Dashboard stats fetched successfully",
@@ -272,6 +289,12 @@ class DashboardView(APIView):
                         "invalidated": total_invalidated_dealers,
                         "expired": total_expired_dealers,
                     },
+                    "devices": {
+                        "total": total_devices,
+                        "in_stock": devices_in_stock,
+                        "assigned_to_customer": devices_assign_to_customer,
+                        "assigned_to_dealer": devices_assign_to_dealer
+                    }
                 },
             )
 
