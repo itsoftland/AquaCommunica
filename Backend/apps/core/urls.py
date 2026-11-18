@@ -1,7 +1,14 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from apps.core.serializers.auth import SessionTokenRefreshSerializer
-from apps.core.views.web import auth, users, profile, audit, device
+from apps.core.views.web import (
+    auth, 
+    users, 
+    profile, 
+    audit, 
+    device,
+    tank
+)
 
 
 urlpatterns = [
@@ -38,5 +45,8 @@ urlpatterns = [
     path('dealerprofile/<int:pk>/update/', profile.UpdateDealerProfile.as_view(), name="update_dealer_profile"),
     path('get-dealer-profile-list/', profile.ListDealerProfiles.as_view(), name="get_dealer_profile_list"),
     path('dealer-profile-details/<int:pk>/', profile.DealerProfileDetails.as_view(), name="dealer_profile_details"),
+
+    # tank urls
+    path('add-tank/', tank.AddTankView.as_view(), name="add_tank"),
 
 ]
