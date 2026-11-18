@@ -54,14 +54,15 @@
 
     <div class="dash-warn" id="dash-validity" role="alert" hidden></div>
     <div class="dash-section-head" id="dash-slots-heading" hidden>
-        <div><span class="dash-section-kicker">At a glance</span><h2>License capacity</h2></div>
-        <p>Track your remaining allocations</p>
+        <div><span class="dash-section-kicker">License</span><h2>Capacity left</h2></div>
+        <p>How much of each allocation is still available</p>
     </div>
     <div id="dash-slots"></div>
     <div class="dash-section-head" id="dash-stats-heading" hidden>
         <div><span class="dash-section-kicker">Your account</span><h2>Account overview</h2></div>
         <p>Current totals and status breakdown</p>
     </div>
+    <div id="dash-skel" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <div id="dash-stats"></div>
     <p class="dash-empty" id="dash-empty" hidden>No statistics are available for your account yet.</p>
     <p class="dash-empty" id="dash-error" hidden>Could not load dashboard statistics. Please refresh the page.</p>
@@ -113,12 +114,17 @@
 .dash-warn.expired .wd { border-color: #efb9b9; }
 @keyframes dash-blink-red { 0%, 100% { box-shadow: 0 0 0 0 rgba(214,69,69,.45); opacity: 1; } 50% { box-shadow: 0 0 0 8px rgba(214,69,69,0); opacity: .75; } }
 @media (max-width: 600px) { .dash-warn { flex-wrap: wrap; } .dash-warn .wd { order: 3; } }
-#dash-slots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; margin-top: 0; }
+#dash-slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-top: 0; }
 #dash-slots:empty { display: none; }
 .slot { min-width: 0; padding: 18px 16px 16px; background: linear-gradient(180deg, #fff, #fcfdff); border-radius: 14px; border: 1px solid #e6ebf0; border-top: 3px solid var(--slot-accent, #5b7cfa); box-shadow: 0 2px 8px rgba(16,24,40,.04); animation: dash-in .5s ease both; transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
 .slot:nth-child(3n + 2) { --slot-accent: var(--dash-tertiary); }
 .slot:nth-child(3n) { --slot-accent: var(--dash-quaternary); }
 .slot:hover { transform: translateY(-3px); border-color: #d3dcff; box-shadow: 0 10px 24px rgba(16,24,40,.09); }
+.slot .cap { margin-top: 6px; color: #7b8794; font-size: .8rem; }
+.slot .cap b { color: #52606d; font-variant-numeric: tabular-nums; }
+.slot.warn { --slot-accent: #e0a100 !important; }
+.slot.low { --slot-accent: #d64545 !important; }
+.slot.warn .count, .slot.low .count { color: var(--slot-accent); }
 .slot h3 { margin: 0 0 10px; font-size: .7rem; font-weight: 700; color: #64727f; text-transform: uppercase; letter-spacing: .08em; }
 .slot h3 { display: flex; align-items: center; gap: 8px; }
 .slot .ico { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex: none; border-radius: 9px; color: #5b7cfa; background: #eef2ff; }
@@ -151,19 +157,102 @@
 .dash-row .lbl { flex: 1; color: #52606d; font-size: .88rem; text-transform: capitalize; }
 .dash-row .val { font-weight: 700; color: #1f2933; font-variant-numeric: tabular-nums; }
 .dash-empty { margin-top: 32px; padding: 28px 20px; text-align: center; color: #64727f; background: #fff; border: 1px dashed #d8e0e7; border-radius: 14px; }
+#dash-skel { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 24px; }
+#dash-skel i { height: 150px; border-radius: 16px; background: linear-gradient(100deg, #eef2f6 30%, #f8fafc 50%, #eef2f6 70%) 0 0 / 200% 100%; animation: dash-shimmer 1.3s linear infinite; }
+@keyframes dash-shimmer { to { background-position: -200% 0; } }
+@media (max-width: 768px) { #dash-skel { grid-template-columns: minmax(0, 1fr); } }
+.dash button:focus-visible { outline: 2px solid var(--dash-secondary); outline-offset: 2px; }
+.tk-hint { display: flex; align-items: center; gap: 8px; margin-top: 18px; padding: 10px 14px; border-radius: 10px; font-size: .88rem; color: var(--c); background: color-mix(in srgb, var(--c) 10%, #fff); }
+.tk-hint::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+.tk-upd { margin-top: 6px; color: #9aa5b1; font-size: .78rem; }
+.tk-progress { height: 3px; margin-top: 12px; border-radius: 999px; background: #edf1f4; overflow: hidden; }
+.tk-progress i { display: block; height: 100%; width: 100%; transform-origin: left; background: var(--dash-secondary); animation: tk-prog 10s linear forwards; }
+.tk-car:hover .tk-progress i { animation-play-state: paused; }
+@keyframes tk-prog { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.tk-view { touch-action: pan-y; }
+.tk-split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 24px; align-items: stretch; }
+.tk-split .tk-car { margin-top: 0; display: flex; flex-direction: column; justify-content: center; }
+.tk-name { margin-top: 18px; text-align: center; font-weight: 700; color: #1f2933; overflow-wrap: anywhere; }
+.tk-detbox { display: grid; }
+.tk-det { grid-area: 1 / 1; opacity: 0; visibility: hidden; transform: translateX(16px); transition: opacity .4s, transform .4s, visibility .4s; }
+.tk-det.on { opacity: 1; visibility: visible; transform: none; }
+.tk-det .tk-top strong { font-size: 1.25rem; }
+.tk-det .tk-pct { margin-top: 14px; font-size: 3.4rem; }
+.tk-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin: 16px 0 0; }
+.tk-facts dt { color: #9aa5b1; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.tk-facts dd { margin: 2px 0 0; color: #1f2933; font-weight: 600; overflow-wrap: anywhere; }
+.tk-right .tk-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 20px; gap: 12px; }
+.tk-right .tk-card { padding: 14px; background: #f9fbfd; box-shadow: none; }
+.tk-right .tk-card b { font-size: 1.25rem; }
+@media (max-width: 900px) { .tk-split { grid-template-columns: minmax(0, 1fr); } }
+.tk-panel { grid-column: span 3; }
+.tk-panel:only-child { grid-column: 1 / -1; }
+.tk-panel .tk-sum { margin-bottom: 4px; }
+.tk-panel .tk-car { margin-top: 14px; }
+.tk-panel .tk-item { padding: 24px 24px 20px; background: #f9fbfd; display: flex; flex-direction: column; align-items: center; }
+.tk-panel .tk-top strong { font-size: 1.1rem; }
+.tk-panel .tk-body { gap: 40px; justify-content: center; margin-top: 16px; }
+.tk-panel .tk-vessel { width: 150px; height: 200px; margin-top: 10px; }
+.tk-panel .tk-vessel::before { top: -10px; left: 18px; right: 18px; height: 12px; }
+.tk-panel .tk-glass { border-width: 4px; border-radius: 16px 16px 22px 22px; }
+.tk-panel .tk-water::before, .tk-panel .tk-water::after { height: 18px; top: -12px; }
+.tk-panel .tk-info { flex: 0 1 auto; }
+.tk-panel .tk-pct { font-size: 3.4rem; margin-bottom: 12px; }
+.tk-panel .tk-meta { font-size: .95rem; }
+.tk-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.tk-card { padding: 18px 16px; background: #fff; border: 1px solid #e6ebf0; border-radius: 14px; box-shadow: 0 2px 8px rgba(16,24,40,.04); animation: dash-in .5s ease both; }
+.tk-card small { display: block; color: #64727f; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.tk-card b { display: block; margin-top: 8px; font-size: 1.5rem; color: #1f2933; font-variant-numeric: tabular-nums; }
+.tk-card em { font-style: normal; font-size: .8rem; color: #7b8794; }
+.tk-car { position: relative; margin-top: 16px; }
+.tk-view { overflow: hidden; border-radius: 14px; }
+.tk-list { display: flex; transition: transform .6s cubic-bezier(.22,.8,.3,1); }
+.tk-item { flex: 0 0 100%; min-width: 0; box-sizing: border-box; }
+.tk-nav { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; }
+.tk-nav button.tk-arrow { width: 34px; height: 34px; border: 1px solid #e0e6ed; border-radius: 50%; background: #fff; color: #52606d; font-size: 1.1rem; cursor: pointer; }
+.tk-nav button.tk-arrow:hover { background: #f1f5f9; }
+.tk-dots { display: flex; gap: 6px; align-items: center; }
+.tk-dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 999px; background: #cfd8e3; cursor: pointer; transition: width .3s, background .3s; }
+.tk-dots button.on { width: 22px; background: #5b7cfa; }
+.tk-count { color: #64727f; font-size: .8rem; font-variant-numeric: tabular-nums; }
+.tk-item { padding: 16px; background: #fff; border: 1px solid #e6ebf0; border-radius: 14px; box-shadow: 0 2px 8px rgba(16,24,40,.04); }
+.tk-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tk-top strong { color: #1f2933; overflow-wrap: anywhere; }
+.tk-badge { padding: 3px 9px; border-radius: 999px; font-size: .7rem; font-weight: 700; text-transform: capitalize; color: var(--c); background: color-mix(in srgb, var(--c) 12%, #fff); }
+.tk-body { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
+.tk-info { flex: 1; min-width: 0; }
+.tk-pct { font-size: 1.8rem; font-weight: 800; color: var(--c); font-variant-numeric: tabular-nums; line-height: 1; margin-bottom: 8px; }
+.tk-vessel { position: relative; flex: none; width: 74px; height: 96px; margin-top: 6px; }
+.tk-vessel::before { content: ""; position: absolute; top: -6px; left: 8px; right: 8px; height: 8px; border-radius: 4px 4px 0 0; background: #cfd8e3; z-index: 2; }
+.tk-glass { position: absolute; inset: 0; overflow: hidden; border: 3px solid #cfd8e3; border-radius: 10px 10px 14px 14px; background: linear-gradient(90deg, #f6f9fc, #fff 40%, #f1f5f9); }
+.tk-water { position: absolute; left: 0; right: 0; bottom: 0; height: var(--w); background: linear-gradient(180deg, color-mix(in srgb, var(--c) 70%, #fff), var(--c)); }
+.tk-item.on .tk-water { animation: tk-fill 1.6s cubic-bezier(.22,.8,.3,1) both; }
+.tk-water::before, .tk-water::after { content: ""; position: absolute; left: -50%; width: 200%; height: 12px; top: -8px; background: color-mix(in srgb, var(--c) 70%, #fff); border-radius: 42%; opacity: .75; animation: tk-wave 4s linear infinite; }
+.tk-water::after { top: -6px; opacity: .45; animation-duration: 6s; animation-direction: reverse; }
+.tk-marks { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: repeating-linear-gradient(to bottom, transparent 0 22%, rgba(120,135,155,.35) 22% 23%); -webkit-mask: linear-gradient(90deg, #000 0 28%, transparent 28%); mask: linear-gradient(90deg, #000 0 28%, transparent 28%); }
+@keyframes tk-fill { from { height: 0; } to { height: var(--w); } }
+@keyframes tk-wave { from { transform: translateX(0); } to { transform: translateX(25%); } }
+@media (prefers-reduced-motion: reduce) { .tk-water, .tk-water::before, .tk-water::after { animation: none; } }
+.tk-bar { height: 8px; margin: 12px 0 8px; border-radius: 999px; background: #edf1f4; overflow: hidden; }
+.tk-bar i { display: block; height: 100%; width: var(--w); background: var(--c); border-radius: inherit; transition: width .6s ease; }
+.tk-meta { display: flex; justify-content: space-between; color: #64727f; font-size: .8rem; }
+@media (max-width: 1000px) { .tk-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @keyframes dash-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-@media (max-width: 1000px) and (min-width: 769px) { #dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } #dash-slots { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1000px) and (min-width: 769px) { .tk-panel { grid-column: 1 / -1; } #dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 768px) {
     .dash-hero { flex-direction: column; padding: 24px; }
     .dash-role { align-self: flex-start; }
     .dash-section-head { align-items: flex-start; flex-direction: column; gap: 5px; margin-top: 24px; }
     #dash-stats { grid-template-columns: minmax(0, 1fr); gap: 14px; }
-    #dash-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+    .tk-panel { grid-column: auto; }
+    .tk-panel .tk-body { gap: 20px; }
+    .tk-panel .tk-vessel { width: 110px; height: 150px; }
+    .tk-panel .tk-pct { font-size: 2.4rem; }
+    #dash-slots { gap: 12px; margin-top: 18px; }
     .dash-panel { padding: 20px; }
 }
 @media (max-width: 420px) {
     .dash-hero { padding: 20px; }
-    #dash-slots { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
     .dash *, .dash *::before, .dash *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
@@ -200,6 +289,104 @@ try {
     const get = (token) => fetch("{% url 'dashboard_stats' %}", { headers: { "Authorization": "Bearer " + token } });
     const show = (id) => { document.getElementById(id).hidden = false; };
 
+    const TK_COLORS = { normal: "#2e9e5b", low: "#e0a100", critical: "#d64545", overflow: "#3b7dd8", offline: "#9aa5b1" };
+    const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+    const fmt = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    const ago = (iso) => {
+        const m = Math.round((Date.now() - new Date(iso)) / 60000);
+        if (isNaN(m)) return "recently";
+        if (m < 1) return "just now";
+        if (m < 60) return m + " min ago";
+        if (m < 1440) return Math.round(m / 60) + " h ago";
+        return Math.round(m / 1440) + " d ago";
+    };
+    async function loadTanks(token) {
+        try {
+            const r = await fetch("{% url 'tank_summary' %}", { headers: { "Authorization": "Bearer " + token } });
+            if (!r.ok) return;
+            const d = ((await r.json()).data) || {};
+            const stats = document.getElementById("dash-stats");
+            const box = el("section", "dash-panel tk-panel");
+            const head = el("div", "dash-head"); head.appendChild(el("h2", null, "Water tanks \u00b7 Quick analysis"));
+            box.appendChild(head);
+            stats.appendChild(box);
+            show("dash-stats-heading");
+            if (!d.total) { box.append(el("p", "dash-empty", "No tanks have been added yet.")); return; }
+            const c = d.status_counts || {};
+            const attention = (c.low || 0) + (c.critical || 0) + (c.overflow || 0);
+            const sum = el("div", "tk-sum");
+            [["Total tanks", d.total, (c.normal || 0) + " normal"],
+             ["Average level", d.average_level_percent + "%", "across all tanks"],
+             ["Stored water", fmt(d.total_current_litres) + " L", "of " + fmt(d.total_capacity_litres) + " L"],
+             ["Need attention", attention, (c.offline || 0) + " offline"]].forEach(([t, v, s]) => {
+                const k = el("div", "tk-card"); k.append(el("small", null, t), el("b", null, v), el("em", null, s)); sum.appendChild(k);
+            });
+            const list = el("div", "tk-list"); const dets = [];
+            d.tanks.forEach((t) => {
+                const col = TK_COLORS[t.status] || "#9aa5b1";
+                const it = el("div", "tk-item"); it.style.setProperty("--c", col);
+                const vessel = el("div", "tk-vessel"), glass = el("div", "tk-glass"), water = el("div", "tk-water");
+                water.style.setProperty("--w", Math.max(0, Math.min(t.level_percent, 100)) + "%");
+                glass.append(water, el("div", "tk-marks")); vessel.appendChild(glass);
+                const lab = el("div", "tk-name", t.name);
+                it.append(vessel, lab);
+                const det = el("div", "tk-det"); det.style.setProperty("--c", col);
+                const top = el("div", "tk-top"); top.append(el("strong", null, t.name), el("span", "tk-badge", t.status));
+                const HINT = { normal: "Water level is healthy.", low: "Level is low \u2013 consider refilling soon.", critical: "Critically low \u2013 refill needed now.", overflow: "Tank is near overflow \u2013 stop the inflow.", offline: "No recent reading from this tank\u2019s transmitter." };
+                const facts = el("dl", "tk-facts");
+                [["Capacity", fmt(t.capacity_litres) + " L"], ["Current", fmt(t.current_litres) + " L"], ["Location", t.location || "\u2014"], ["Last reading", t.last_reading_at ? ago(t.last_reading_at) : "No readings yet"]].forEach(([k, v]) => { facts.append(el("dt", null, k), el("dd", null, v)); });
+                det.append(top, el("div", "tk-pct", t.level_percent + "%"), el("div", "tk-hint", HINT[t.status] || ""), facts);
+                dets.push(det);
+                list.appendChild(it);
+            });
+            const view = el("div", "tk-view"); view.appendChild(list);
+            const car = el("div", "tk-car"); car.appendChild(view);
+            const items = [...list.children];
+            let cur = 0, timer;
+            const nav = el("div", "tk-nav");
+            const prev = el("button", "tk-arrow", "\u2039"), next = el("button", "tk-arrow", "\u203a");
+            prev.type = next.type = "button"; prev.setAttribute("aria-label", "Previous tank"); next.setAttribute("aria-label", "Next tank");
+            const dots = el("div", "tk-dots"), count = el("span", "tk-count");
+            const dotBtns = items.map((_, i) => { const b = el("button"); b.type = "button"; b.setAttribute("aria-label", "Tank " + (i + 1)); b.onclick = () => { go(i); restart(); }; dots.appendChild(b); return b; });
+            function go(i) {
+                cur = (i + items.length) % items.length;
+                list.style.transform = "translateX(-" + cur * 100 + "%)";
+                items.forEach((x, j) => x.classList.toggle("on", j === cur));
+                dets.forEach((x, j) => x.classList.toggle("on", j === cur));
+                dotBtns.forEach((b, j) => b.classList.toggle("on", j === cur));
+                count.textContent = (cur + 1) + " / " + items.length;
+            }
+            const prog = el("div", "tk-progress"); const pbar = el("i"); prog.appendChild(pbar);
+            function restart() {
+                clearInterval(timer);
+                pbar.style.animation = "none"; void pbar.offsetWidth; pbar.style.animation = "";
+                if (items.length > 1) timer = setInterval(() => { go(cur + 1); restart(); }, 10000);
+            }
+            let sx = null;
+            view.addEventListener("touchstart", (e) => { sx = e.touches[0].clientX; }, { passive: true });
+            view.addEventListener("touchend", (e) => {
+                if (sx === null) return;
+                const dx = e.changedTouches[0].clientX - sx; sx = null;
+                if (Math.abs(dx) > 40) { go(cur + (dx < 0 ? 1 : -1)); restart(); }
+            });
+            car.tabIndex = 0;
+            car.addEventListener("keydown", (e) => {
+                if (e.key === "ArrowRight") { go(cur + 1); restart(); }
+                if (e.key === "ArrowLeft") { go(cur - 1); restart(); }
+            });
+            prev.onclick = () => { go(cur - 1); restart(); };
+            next.onclick = () => { go(cur + 1); restart(); };
+            car.addEventListener("mouseenter", () => clearInterval(timer));
+            car.addEventListener("mouseleave", restart);
+            if (items.length > 1) { nav.append(prev, dots, count, next); car.append(prog, nav); }
+            go(0); restart();
+            const right = el("div", "tk-right"); const detBox = el("div", "tk-detbox"); detBox.append(...dets);
+            right.append(detBox, sum);
+            const split = el("div", "tk-split"); split.append(car, right);
+            box.append(split);
+        } catch (_) {}
+    }
+
     try {
         let res = await get(localStorage.getItem("access_token") || "");
         if (res.status === 401) {
@@ -215,6 +402,7 @@ try {
             res = await get(t);
         }
         if (!res.ok) return show("dash-error");
+        res.__t = localStorage.getItem("access_token") || "";
         const data = ((await res.json()).data) || {};
         // License/slot tiles are only for user_admin and dealer accounts
         let role = "";
@@ -255,10 +443,11 @@ try {
                 w.hidden = false;
             }
         }
+        if (["user_admin", "parent_user", "child_user"].includes(role)) loadTanks(res.__t);
         const groups = Object.keys(data);
         if (slots) show("dash-slots-heading");
         if (groups.length) show("dash-stats-heading");
-        if (!groups.length && !slots) return show("dash-empty");
+        if (!groups.length && !slots && !["user_admin", "parent_user", "child_user"].includes(role)) return show("dash-empty");
 
         if (slots) {
             // The API returns each license quota with its remaining count
@@ -283,10 +472,15 @@ try {
                 count.className = "count";
                 const avail = Math.max(x.left, 0);
                 count.textContent = avail;
-                const t = document.createElement("span");
-                t.textContent = "/" + x.total;
-                count.appendChild(t);
-                el.append(h, count);
+                const cap = document.createElement("div");
+                cap.className = "cap";
+                const cb = document.createElement("b");
+                cb.textContent = x.total;
+                cap.append("available of ", cb);
+                const ratio = x.total ? avail / x.total : 0;
+                if (x.total && ratio <= 0.1) el.classList.add("low");
+                else if (x.total && ratio <= 0.25) el.classList.add("warn");
+                el.append(h, count, cap);
                 const bar = document.createElement("div");
                 bar.className = "bar";
                 const fill = document.createElement("i");
@@ -337,6 +531,8 @@ try {
         });
     } catch (_) {
         show("dash-error");
+    } finally {
+        const sk = document.getElementById("dash-skel"); if (sk) sk.remove();
     }
 })();
 </script>

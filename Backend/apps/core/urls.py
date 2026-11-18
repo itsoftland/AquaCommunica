@@ -48,5 +48,6 @@ urlpatterns = [
 
     # tank urls
     path('add-tank/', tank.AddTankView.as_view(), name="add_tank"),
+    path('tank-summary/', tank.TankSummaryView.as_view(), name="tank_summary"),
 
 ]
