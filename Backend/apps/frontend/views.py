@@ -22,3 +22,7 @@ def user_page(request):
 
 def device_page(request):
     return render(request, "Devices/devices.html")
+
+
+def tank_page(request):
+    return render(request, "Tanks/tanks.html")

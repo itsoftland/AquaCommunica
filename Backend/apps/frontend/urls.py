@@ -9,4 +9,5 @@ urlpatterns = [
     path('dealers/', vw.dealer_Page, name="dealer_page"),
     path('devices/', vw.device_page, name="device_page"),
     path('users/', vw.user_page, name="user_page"),
+    path('tanks/', vw.tank_page, name="tank_page"),
 ]

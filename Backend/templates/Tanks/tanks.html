@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Tanks | AquaCommunica{% endblock %}
+
+{% block content %}
+<style id="auth-guard-style">body { visibility: hidden; }</style>
+<script>
+const TANK_ROLES = ["user_admin", "parent_user", "child_user"];
+const ADD_ROLES = ["user_admin", "parent_user"];
+const authHdr = () => ({ "Authorization": "Bearer " + localStorage.getItem("access_token") });
+
+(async () => {
+    const toLogin = () => {
+        ["access_token", "refresh_token", "user"].forEach(k => localStorage.removeItem(k));
+        window.location.replace("{% url 'login_page' %}");
+    };
+    const profile = (token) => fetch("{% url 'user_profile' %}", { headers: { "Authorization": "Bearer " + token } });
+    const access = localStorage.getItem("access_token");
+    const refresh = localStorage.getItem("refresh_token");
+    if (!access || !refresh) return toLogin();
+    try {
+        let res = await profile(access);
+        if (res.status === 401) {
+            const r = await fetch("{% url 'token_refresh' %}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh }),
+            });
+            const body = await r.json().catch(() => ({}));
+            const newAccess = body.access || (body.data && body.data.access);
+            if (!r.ok || !newAccess) return toLogin();
+            localStorage.setItem("access_token", newAccess);
+            res = await profile(newAccess);
+        }
+        if (!res.ok) return toLogin();
+        const body = await res.json();
+        const role = body.data.user.role;
+        if (!TANK_ROLES.includes(role)) return window.location.replace("{% url 'dashboard' %}");
+        if (ADD_ROLES.includes(role)) document.getElementById("add-tank-btn").hidden = false;
+    } catch (_) {
+        return toLogin();
+    }
+    document.getElementById("auth-guard-style").remove();
+    loadTanks();
+})();
+
+async function loadTanks() {
+    let res;
+    try { res = await fetch("{% url 'tank_summary' %}", { headers: authHdr() }); }
+    catch (_) { return; }
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.data) return;
+    const d = json.data;
+    document.getElementById("s-total").textContent = d.total;
+    document.getElementById("s-avg").textContent = d.average_level_percent + "%";
+    document.getElementById("s-litres").textContent = Math.round(d.total_current_litres) + " / " + d.total_capacity_litres + " L";
+}
+
+const tkErr = (m) => { const e = document.getElementById("tk-err"); e.textContent = m || ""; e.hidden = !m; };
+
+async function openTankModal() {
+    document.getElementById("tk-form").reset();
+    tkErr("");
+    document.getElementById("tk-modal").hidden = false;
+    const sel = document.getElementById("tk-transmitter");
+    sel.innerHTML = '<option value="">No transmitter</option>';
+    try {
+        let url = "{% url 'devices_list' %}?device_type=transmitter&is_active=true";
+        while (url) {
+            const r = await fetch(url, { headers: authHdr() });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok || !j.data) break;
+            for (const x of j.data.results) {
+                const o = document.createElement("option");
+                o.value = x.id; o.textContent = x.serial_number;
+                sel.appendChild(o);
+            }
+            url = j.data.next;
+        }
+    } catch (_) {}
+}
+function closeTankModal() { document.getElementById("tk-modal").hidden = true; }
+
+async function submitTank(ev) {
+    ev.preventDefault();
+    tkErr("");
+    const v = (id) => document.getElementById(id).value.trim();
+    const payload = {
+        name: v("tk-name"),
+        location: v("tk-location"),
+        capacity_litres: Number(v("tk-capacity")),
+        low_level_thresholds: Number(v("tk-low")),
+        high_level_thresholds: Number(v("tk-high")),
+    };
+    if (v("tk-transmitter")) payload.transmitter = Number(v("tk-transmitter"));
+    if (!payload.name) return tkErr("Tank name is required.");
+    const btn = document.getElementById("tk-submit");
+    btn.disabled = true;
+    try {
+        const res = await fetch("{% url 'add_tank' %}", {
+            method: "POST",
+            headers: { ...authHdr(), "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            const errs = j.data && typeof j.data === "object"
+                ? Object.entries(j.data).map(([k, m]) => k + ": " + [].concat(m).join(" ")).join(" | ")
+                : "";
+            return tkErr(errs || j.message || "Could not add tank.");
+        }
+        closeTankModal();
+        loadTanks();
+    } catch (_) {
+        tkErr("Network error. Please try again.");
+    } finally {
+        btn.disabled = false;
+    }
+}
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTankModal(); });
+</script>
+
+{% include "nav/nav.html" %}
+<div class="customer-page">
+    <div class="page-head">
+        <h1>Tanks</h1>
+        <button type="button" id="add-tank-btn" class="action-btn" onclick="openTankModal()" hidden>Add Tank</button>
+    </div>
+    <div class="tk-stats">
+        <div class="tk-stat"><span>Total tanks</span><b id="s-total">-</b></div>
+        <div class="tk-stat"><span>Average level</span><b id="s-avg">-</b></div>
+        <div class="tk-stat"><span>Stored / capacity</span><b id="s-litres">-</b></div>
+    </div>
+</div>
+
+<div class="tk-overlay" id="tk-modal" hidden onclick="if (event.target === this) closeTankModal()">
+    <form class="tk-dialog" id="tk-form" onsubmit="submitTank(event)" novalidate>
+        <h3>Add Tank</h3>
+        <label>Name<input id="tk-name" maxlength="100" required></label>
+        <label>Location<input id="tk-location" maxlength="255"></label>
+        <label>Capacity (litres)<input id="tk-capacity" type="number" min="1" required></label>
+        <div class="tk-row">
+            <label>Low level %<input id="tk-low" type="number" min="1" max="100" value="20" required></label>
+            <label>High level %<input id="tk-high" type="number" min="1" max="100" value="90" required></label>
+        </div>
+        <label>Transmitter (optional)<select id="tk-transmitter"><option value="">No transmitter</option></select></label>
+        <div class="tk-err" id="tk-err" role="alert" hidden></div>
+        <div class="tk-actions">
+            <button type="button" class="tk-btn ghost" onclick="closeTankModal()">Cancel</button>
+            <button type="submit" class="tk-btn primary" id="tk-submit">Add Tank</button>
+        </div>
+    </form>
+</div>
+<style>
+.tk-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.tk-stat { flex: 1; min-width: 160px; background: #fff; border: 1px solid #e3e8ef; border-radius: 12px; padding: 12px 16px; }
+.tk-stat span { display: block; font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; opacity: .6; }
+.tk-stat b { font-size: 1.4rem; color: #5b7cfa; }
+#add-tank-btn { display: inline-flex; align-items: center; background: #fff; border: 1.5px solid #5b7cfa; border-radius: 999px; color: #5b7cfa; padding: 9px 18px; font-weight: 600; }
+#add-tank-btn:hover { background: #5b7cfa; color: #fff; }
+.tk-overlay { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.5); padding: 16px; }
+.tk-overlay[hidden] { display: none; }
+.tk-dialog { background: #fff; color: #1f2933; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; border-radius: 14px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+.tk-dialog h3 { margin: 0 0 8px; }
+.tk-dialog label { display: block; margin-top: 12px; font-size: .85rem; font-weight: 600; flex: 1; }
+.tk-dialog input, .tk-dialog select { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 9px 10px; border: 1.5px solid #dbe3ea; border-radius: 8px; font-size: .95rem; background: #fff; }
+.tk-dialog input:focus, .tk-dialog select:focus { outline: none; border-color: #5b7cfa; }
+.tk-row { display: flex; gap: 12px; }
+.tk-err { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: #fdecea; color: #b3261e; font-size: .85rem; border-left: 3px solid #b3261e; }
+.tk-err[hidden] { display: none; }
+.tk-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.tk-btn { padding: 10px 22px; border-radius: 10px; font-size: .92rem; font-weight: 600; cursor: pointer; }
+.tk-btn.ghost { background: #fff; border: 1.5px solid #dbe3ea; color: #0b2a3f; }
+.tk-btn.primary { background: #5b7cfa; border: 1.5px solid #5b7cfa; color: #fff; }
+.tk-btn:disabled { opacity: .6; cursor: progress; }
+</style>
+{% endblock %}
