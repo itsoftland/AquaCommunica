@@ -30,7 +30,7 @@ class createTankSerislizer(serializers.ModelSerializer):
             'location',
         ]
         extra_kwargs = {
-            'transmitter': {'required': False, 'allow_null': True},
+            'transmitter': {'required': True},
             'low_level_thresholds': {'required': True},
             'high_level_thresholds': {'required': True},
         }

@@ -62,7 +62,7 @@ async function openTankModal() {
     tkErr("");
     document.getElementById("tk-modal").hidden = false;
     const sel = document.getElementById("tk-transmitter");
-    sel.innerHTML = '<option value="">No transmitter</option>';
+    sel.innerHTML = '<option value="">Select transmitter</option>';
     try {
         let url = "{% url 'devices_list' %}?device_type=transmitter&is_active=true";
         while (url) {
@@ -91,8 +91,9 @@ async function submitTank(ev) {
         low_level_thresholds: Number(v("tk-low")),
         high_level_thresholds: Number(v("tk-high")),
     };
-    if (v("tk-transmitter")) payload.transmitter = Number(v("tk-transmitter"));
     if (!payload.name) return tkErr("Tank name is required.");
+    if (!v("tk-transmitter")) return tkErr("Please select a transmitter.");
+    payload.transmitter = Number(v("tk-transmitter"));
     const btn = document.getElementById("tk-submit");
     btn.disabled = true;
     try {
@@ -142,7 +143,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTankM
             <label>Low level %<input id="tk-low" type="number" min="1" max="100" value="20" required></label>
             <label>High level %<input id="tk-high" type="number" min="1" max="100" value="90" required></label>
         </div>
-        <label>Transmitter (optional)<select id="tk-transmitter"><option value="">No transmitter</option></select></label>
+        <label>Transmitter<select id="tk-transmitter" required><option value="">Select transmitter</option></select></label>
         <div class="tk-err" id="tk-err" role="alert" hidden></div>
         <div class="tk-actions">
             <button type="button" class="tk-btn ghost" onclick="closeTankModal()">Cancel</button>
