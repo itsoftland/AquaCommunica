@@ -44,6 +44,7 @@
         currentRole = body.data.user.role;
         if (ASSIGN_ROLES.includes(currentRole)) document.getElementById("assign-open-btn").hidden = false;
         if (currentRole === "superadmin") document.getElementById("assign-dealer-open-btn").hidden = false;
+        if (currentRole === "user_admin") document.getElementById("f-alloc-label").hidden = true;
     } catch (_) {
         return toLogin();
     }
@@ -264,7 +265,7 @@ async function submitAssign(ev) {
                 <option value="gateway">Gateway</option>
             </select>
         </label>
-        <label>Allocation
+        <label id="f-alloc-label">Allocation
             <select id="f-alloc" onchange="applyFilters()">
                 <option value="">All</option>
                 <option value="stock">Stock</option>
@@ -342,6 +343,7 @@ async function submitAssign(ev) {
 .badge-auth-expired, .badge-auth-blocked { background: #fee2e2; color: #b91c1c; }
 .filter-bar { position: relative; }
 .filter-bar::before { content: "Filters"; flex: 0 0 100%; align-self: center; font-weight: 800; font-size: .85rem; letter-spacing: .06em; text-transform: uppercase; background: linear-gradient(90deg, #5b7cfa, #5b5bd6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.filter-bar label[hidden] { display: none; }
 .filter-bar label { display: flex; flex-direction: column; font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #5b5bd6; gap: 5px; }
 .filter-bar select, .filter-bar input { padding: 8px 12px; border: 1.5px solid #d3d9f5; border-radius: 999px; font-size: .9rem; color: #1f2933; background: #fff; min-width: 150px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
 .filter-bar select:hover, .filter-bar input:hover { border-color: #5b5bd6; }
