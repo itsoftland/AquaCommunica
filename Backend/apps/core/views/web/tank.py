@@ -20,22 +20,25 @@ from ...services.tank import get_tank
 action_log = logging.getLogger('aquacommunica.action.log')
 
 
+USER_ADMIN  = CustomUser.Role.USER_ADMIN
+PARENT_USER = CustomUser.Role.PARENT_USER
+CHILD_USER  = CustomUser.Role.CHILD_USER
+
+
+
 class AddTankView(APIView):
 
     permission_classes = [
         IsAuthenticated,
     ]
 
-    PARENT_USER = CustomUser.Role.PARENT_USER
-    USER_ADMIN  = CustomUser.Role.USER_ADMIN
-
     def post(self, request):
 
         user = request.user
 
         if user.role not in [
-            self.PARENT_USER,
-            self.USER_ADMIN,
+            PARENT_USER,
+            USER_ADMIN,
         ]:
             action_log.warning(
                 "Add tank denied | user_id=%s role=%s", user.id, user.role
@@ -95,9 +98,9 @@ class TankSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     ALLOWED = [
-        CustomUser.Role.USER_ADMIN,
-        CustomUser.Role.PARENT_USER,
-        CustomUser.Role.CHILD_USER,
+        USER_ADMIN,
+        PARENT_USER,
+        CHILD_USER,
     ]
 
     def get(self, request):
@@ -114,7 +117,7 @@ class TankSummaryView(APIView):
             )
 
         profile = get_owner_profile(user)
-        tanks = Tank.objects.filter(user_profile=profile, is_active=True) if profile else Tank.objects.none()
+        tanks = Tank.objects.filter(user_profile=profile) if profile else Tank.objects.none()
 
         counts = {s.value: 0 for s in TankStatus}
         for row in tanks.values_list("status", flat=True):
@@ -129,6 +132,7 @@ class TankSummaryView(APIView):
                 "name": t.name,
                 "location": t.location,
                 "status": t.status,
+                "is_active": t.is_active,
                 "level_percent": float(t.current_level_precent),
                 "current_litres": float(t.current_litres),
                 "capacity_litres": t.capacity_litres,
@@ -163,9 +167,9 @@ class TankDetailsView(APIView):
     ]
 
     ALLOWED = [
-        CustomUser.Role.USER_ADMIN,
-        CustomUser.Role.PARENT_USER,
-        CustomUser.Role.CHILD_USER,
+        USER_ADMIN,
+        PARENT_USER,
+        CHILD_USER,
     ]
 
     def get(self, request, pk):
@@ -196,4 +200,84 @@ class TankDetailsView(APIView):
         return success_response(
             message="Tank details fetched successfully",
             data=TankSerializer(tank).data,
+        )
+
+
+class TankActiveandDeactive(APIView):
+
+    permission_classes = [
+        IsAuthenticated,
+    ]
+
+    def post(self, request, pk):
+
+        user = request.user
+
+        if user.role not in [
+            USER_ADMIN,
+            PARENT_USER,
+        ]:
+            action_log.warning(
+                "Tank activate/deactivate denied | user_id=%s role=%s tank_id=%s",
+                user.id, user.role, pk,
+            )
+            return error_response(
+                message="you don't have permission to activate or deactivate tank",
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        tank = get_tank(pk=pk)
+        
+        profile = get_owner_profile(user)
+        if profile is None or tank.user_profile_id != profile.id:
+            action_log.warning(
+                "Tank activate/deactivate denied: not owner | user_id=%s tank_id=%s", user.id, pk
+            )
+            return error_response(
+                message="Tank not found",
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        old_active = tank.is_active
+        tank.is_active = not old_active
+
+        if tank.is_active:
+            level = tank.current_level_precent
+
+            if level is None:
+                tank.status = TankStatus.OFFLINE
+            elif level > 100:
+                tank.status = TankStatus.OVERFLOW
+            elif level > 25:
+                tank.status = TankStatus.NORMAL
+            elif level > 10:
+                tank.status = TankStatus.LOW
+            else:
+                tank.status = TankStatus.CRITICAL
+                
+        else:
+            tank.status = TankStatus.OFFLINE
+            
+        tank.save(update_fields=[
+            'is_active',
+            'status'
+        ])
+
+        state = "activated" if tank.is_active else "deactivated"
+        action_log.info(
+            "Tank %s | user_id=%s tank_id=%s", state, user.id, pk
+        )
+        record_audit(
+            request,
+            AuditLog.Action.UPDATE,
+            user=user,
+            instance=tank,
+            description=f"Tank {tank.name} {state}",
+            old_values={"is_active": old_active},
+            new_values={"is_active": tank.is_active},
+        )
+
+        return success_response(
+            message=f"Tank {state} successfully",
+            data={"id": tank.id, "is_active": tank.is_active},
         )

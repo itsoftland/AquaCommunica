@@ -6,6 +6,7 @@
 <script>
 const TANK_ROLES = ["user_admin", "parent_user", "child_user"];
 const ADD_ROLES = ["user_admin", "parent_user"];
+let canToggle = false;
 const authHdr = () => ({ "Authorization": "Bearer " + localStorage.getItem("access_token") });
 
 (async () => {
@@ -35,6 +36,7 @@ const authHdr = () => ({ "Authorization": "Bearer " + localStorage.getItem("acce
         const body = await res.json();
         const role = body.data.user.role;
         if (!TANK_ROLES.includes(role)) return window.location.replace("{% url 'dashboard' %}");
+        canToggle = ADD_ROLES.includes(role);
         if (ADD_ROLES.includes(role)) document.getElementById("add-tank-btn").hidden = false;
     } catch (_) {
         return toLogin();
@@ -74,7 +76,7 @@ function renderTanks(tanks, silent) {
     for (const t of tanks) {
         const b = document.createElement("button");
         b.type = "button";
-        b.className = "tk-chip" + (t.id === selectedTankId ? " active" : "");
+        b.className = "tk-chip" + (t.id === selectedTankId ? " active" : "") + (t.is_active ? "" : " inactive");
         const lv = Math.max(0, Math.min(100, Number(t.level_percent) || 0));
         b.innerHTML = '<span class="tk-chip-top"><i class="tk-dot" style="background:' + levelColor(t.level_percent, null) + '"></i>' + esc(t.name) +
             '<em>' + Math.round(lv) + '%</em></span><span class="tk-chip-bar"><u style="width:' + lv + '%"></u></span>';
@@ -132,7 +134,10 @@ async function loadTankDetails(id, silent) {
     const tile = (label, value, sub) => "<div class='tk-tile'><span>" + label + "</span><b>" + esc(value) + "</b>" + (sub ? "<small>" + esc(sub) + "</small>" : "") + "</div>";
     box.innerHTML =
         "<div class='tk-dhead'><div><h3>" + esc(t.name) + "</h3><p>&#128205; " + esc(t.location || "No location set") + "</p></div>" +
-        "<span class='tk-badge' style='background:" + color + "1f;color:" + color + "'>" + esc(statusLabel(t.status)) + "</span></div>" +
+        "<div class='tk-dright'>" +
+          (canToggle ? "<label class='tk-switch' title='" + (t.is_active ? "Deactivate" : "Activate") + " tank'><input type='checkbox' id='tk-toggle' " + (t.is_active ? "checked" : "") + " onchange='toggleTank(" + t.id + ", this)'><span class='tk-slider'></span><em>" + (t.is_active ? "Active" : "Inactive") + "</em></label>"
+                      : "<span class='tk-badge' style='background:" + (t.is_active ? "#1a9e5a1f;color:#1a9e5a" : "#8a9bb01f;color:#6c819a") + "'>" + (t.is_active ? "Active" : "Inactive") + "</span>") +
+          "<span class='tk-badge' style='background:" + color + "1f;color:" + color + "'>" + esc(statusLabel(t.status)) + "</span></div></div>" +
         "<div class='tk-body'>" +
         "<div class='tk-tank'>" + tankSvg(pct, color, t.low_level_thresholds, t.high_level_thresholds, litres, t.capacity_litres) + "</div>" +
         "<div class='tk-grid'>" +
@@ -143,6 +148,20 @@ async function loadTankDetails(id, silent) {
             tile("Last reading", fmtDate(t.last_reading_at)) +
             tile("Added on", fmtDate(t.created_at)) +
         "</div></div>";
+}
+
+const TANK_TOGGLE_URL = "{% url 'tank_active_toggle' 0 %}";
+async function toggleTank(id, input) {
+    input.disabled = true;
+    try {
+        const res = await fetch(TANK_TOGGLE_URL.replace(/0\/$/, id + "/"), { method: "POST", headers: authHdr() });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) { input.checked = !input.checked; toast(j.message || "Could not update tank."); }
+        else { toast(j.message || "Tank updated"); await loadTanks(); return; }
+    } catch (_) {
+        input.checked = !input.checked; toast("Network error. Please try again.");
+    }
+    input.disabled = false;
 }
 
 function tankSvg(pct, color, low, high, litres, cap) {
@@ -322,6 +341,17 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTankM
 .tk-chip.active { border-color: #5b7cfa; background: #f3f6ff; box-shadow: 0 0 0 3px rgba(91,124,250,.15); }
 .tk-chip-top { display: flex; align-items: center; gap: 8px; font-size: .92rem; }
 .tk-chip-top em { margin-left: auto; font-style: normal; font-size: .8rem; opacity: .7; }
+.tk-chip.inactive { opacity: .6; }
+.tk-dright { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.tk-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: .8rem; font-weight: 600; }
+.tk-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.tk-slider { position: relative; width: 40px; height: 22px; border-radius: 99px; background: #c5cfdb; transition: background .2s; }
+.tk-slider::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.tk-switch input:checked + .tk-slider { background: #1a9e5a; }
+.tk-switch input:checked + .tk-slider::after { transform: translateX(18px); }
+.tk-switch input:focus-visible + .tk-slider { outline: 2px solid #5b7cfa; outline-offset: 2px; }
+.tk-switch input:disabled + .tk-slider { opacity: .6; }
+.tk-switch em { font-style: normal; min-width: 52px; }
 .tk-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .tk-chip-bar { display: block; height: 5px; background: #e6ecf3; border-radius: 99px; margin-top: 9px; overflow: hidden; }
 .tk-chip-bar u { display: block; height: 100%; background: #5b7cfa; border-radius: 99px; transition: width .5s; }

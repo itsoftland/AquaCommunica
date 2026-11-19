@@ -83,7 +83,7 @@ class Tank(models.Model):
     )
 
     is_active = models.BooleanField(
-        default=True
+        default=False
     )
 
     created_by = models.ForeignKey(
