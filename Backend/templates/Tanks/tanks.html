@@ -41,9 +41,10 @@ const authHdr = () => ({ "Authorization": "Bearer " + localStorage.getItem("acce
     }
     document.getElementById("auth-guard-style").remove();
     loadTanks();
+    setInterval(() => { if (!document.hidden) loadTanks(true); }, 30000);
 })();
 
-async function loadTanks() {
+async function loadTanks(silent) {
     let res;
     try { res = await fetch("{% url 'tank_summary' %}", { headers: authHdr() }); }
     catch (_) { return; }
@@ -53,29 +54,139 @@ async function loadTanks() {
     document.getElementById("s-total").textContent = d.total;
     document.getElementById("s-avg").textContent = d.average_level_percent + "%";
     document.getElementById("s-litres").textContent = Math.round(d.total_current_litres) + " / " + d.total_capacity_litres + " L";
-    renderTanks(d.tanks || []);
+    renderTanks(d.tanks || [], silent);
 }
 
 let tankList = [];
 let selectedTankId = null;
 
-function renderTanks(tanks) {
+function renderTanks(tanks, silent) {
     tankList = tanks;
     if (!tanks.some(t => t.id === selectedTankId)) selectedTankId = tanks.length ? tanks[0].id : null;
     const row = document.getElementById("tk-row");
     row.innerHTML = "";
     if (!tanks.length) {
-        row.innerHTML = '<span class="tk-empty">No tanks found.</span>';
+        row.innerHTML = '';
+        document.getElementById("tk-empty-state").hidden = false;
+    } else {
+        document.getElementById("tk-empty-state").hidden = true;
     }
     for (const t of tanks) {
         const b = document.createElement("button");
         b.type = "button";
         b.className = "tk-chip" + (t.id === selectedTankId ? " active" : "");
-        b.textContent = t.name;
+        const lv = Math.max(0, Math.min(100, Number(t.level_percent) || 0));
+        b.innerHTML = '<span class="tk-chip-top"><i class="tk-dot" style="background:' + levelColor(t.level_percent, null) + '"></i>' + esc(t.name) +
+            '<em>' + Math.round(lv) + '%</em></span><span class="tk-chip-bar"><u style="width:' + lv + '%"></u></span>';
         b.onclick = () => { selectedTankId = t.id; renderTanks(tankList); };
         row.appendChild(b);
     }
+    loadTankDetails(selectedTankId, silent);
 }
+
+function levelColor(pct, low, high) {
+    pct = Number(pct) || 0;
+    if (low == null) low = 20;
+    if (high == null) high = 90;
+    return pct <= low ? "#e5484d" : pct >= high ? "#f5a524" : "#3b9cf5";
+}
+function statusLabel(st) { return String(st || "-").replace(/_/g, " ").replace(/^./, c => c.toUpperCase()); }
+function fmtDate(v) { return v ? new Date(v).toLocaleString() : "Never"; }
+function toast(msg) {
+    const el = document.getElementById("tk-toast");
+    el.textContent = msg; el.hidden = false;
+    clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, 3000);
+}
+async function refreshTanks(btn) {
+    if (btn) btn.classList.add("spin");
+    await loadTanks();
+    if (btn) setTimeout(() => btn.classList.remove("spin"), 400);
+}
+
+const TANK_DETAILS_URL = "{% url 'tank_deatils' 0 %}";
+let detailsReq = 0;
+
+async function loadTankDetails(id, silent) {
+    const box = document.getElementById("tk-details");
+    if (id === null || id === undefined) { box.hidden = true; return; }
+    const req = ++detailsReq;
+    box.hidden = false;
+    if (!silent) box.innerHTML = '<div class="tk-skel"></div>';
+    let res, json;
+    try {
+        res = await fetch(TANK_DETAILS_URL.replace(/0\/$/, id + "/"), { headers: authHdr() });
+        json = await res.json().catch(() => ({}));
+    } catch (_) {
+        if (req === detailsReq && !silent) box.innerHTML = '<span class="tk-empty">Could not load tank details.</span>';
+        return;
+    }
+    if (req !== detailsReq) return;
+    if (!res.ok || !json.data) {
+        box.innerHTML = '<span class="tk-empty">' + esc(json.message || "Could not load tank details.") + '</span>';
+        return;
+    }
+    const t = json.data;
+    const pct = Math.max(0, Math.min(100, Number(t.current_level_precent) || 0));
+    const color = levelColor(pct, t.low_level_thresholds, t.high_level_thresholds);
+    const litres = Math.round(t.capacity_litres * pct / 100);
+    const tile = (label, value, sub) => "<div class='tk-tile'><span>" + label + "</span><b>" + esc(value) + "</b>" + (sub ? "<small>" + esc(sub) + "</small>" : "") + "</div>";
+    box.innerHTML =
+        "<div class='tk-dhead'><div><h3>" + esc(t.name) + "</h3><p>&#128205; " + esc(t.location || "No location set") + "</p></div>" +
+        "<span class='tk-badge' style='background:" + color + "1f;color:" + color + "'>" + esc(statusLabel(t.status)) + "</span></div>" +
+        "<div class='tk-body'>" +
+        "<div class='tk-tank'>" + tankSvg(pct, color, t.low_level_thresholds, t.high_level_thresholds, litres, t.capacity_litres) + "</div>" +
+        "<div class='tk-grid'>" +
+            tile("Current level", pct + "%", litres + " L stored") +
+            tile("Capacity", t.capacity_litres + " L") +
+            tile("Low alert at", t.low_level_thresholds + "%") +
+            tile("High alert at", t.high_level_thresholds + "%") +
+            tile("Last reading", fmtDate(t.last_reading_at)) +
+            tile("Added on", fmtDate(t.created_at)) +
+        "</div></div>";
+}
+
+function tankSvg(pct, color, low, high, litres, cap) {
+    const top = 34, bot = 214, rx = 60, ry = 14, cx = 80;
+    const y = (p) => bot - (bot - top) * p / 100;
+    const wy = y(pct);
+    const tick = (p, c, label) =>
+        "<line x1='142' x2='" + (label ? 154 : 148) + "' y1='" + y(p) + "' y2='" + y(p) + "' stroke='" + c + "' stroke-width='2'/>" +
+        (label ? "<text x='157' y='" + (y(p) + 3) + "' font-size='9' fill='" + c + "' font-weight='700'>" + label + "</text>" : "");
+    let ticks = "";
+    [0, 25, 50, 75, 100].forEach(p => ticks += tick(p, "#8a9bb0", ""));
+    ticks += tick(low, "#e5484d", "L") + tick(high, "#f5a524", "H");
+    const water = pct <= 0 ? "" :
+        "<g clip-path='url(#tkClip)'>" +
+          "<rect x='20' y='" + wy + "' width='120' height='" + (bot + ry - wy) + "' fill='url(#tkWater)'/>" +
+          "<ellipse cx='" + cx + "' cy='" + wy + "' rx='" + rx + "' ry='" + ry + "' fill='" + color + "' opacity='.55'/>" +
+          "<ellipse class='tk-ripple' cx='" + cx + "' cy='" + wy + "' rx='" + (rx - 8) + "' ry='" + (ry - 4) + "' fill='none' stroke='#fff' stroke-opacity='.6'/>" +
+        "</g>";
+    return "<svg viewBox='0 0 190 250' width='190' height='250' role='img' aria-label='Tank level " + pct + "%'>" +
+      "<defs>" +
+        "<clipPath id='tkClip'><rect x='20' y='" + top + "' width='120' height='" + (bot - top) + "'/>" +
+          "<ellipse cx='" + cx + "' cy='" + top + "' rx='" + rx + "' ry='" + ry + "'/>" +
+          "<ellipse cx='" + cx + "' cy='" + bot + "' rx='" + rx + "' ry='" + ry + "'/></clipPath>" +
+        "<linearGradient id='tkWater' x1='0' x2='0' y1='0' y2='1'><stop offset='0' stop-color='" + color + "' stop-opacity='.75'/><stop offset='1' stop-color='" + color + "'/></linearGradient>" +
+        "<linearGradient id='tkBody' x1='0' x2='1'><stop offset='0' stop-color='#9fb2c8'/><stop offset='.25' stop-color='#f4f8fc'/><stop offset='.6' stop-color='#d9e3ee'/><stop offset='1' stop-color='#8ea2b9'/></linearGradient>" +
+        "<linearGradient id='tkGlass' x1='0' x2='1'><stop offset='0' stop-color='#fff' stop-opacity='.15'/><stop offset='.2' stop-color='#fff' stop-opacity='.55'/><stop offset='.35' stop-color='#fff' stop-opacity='0'/><stop offset='.85' stop-color='#000' stop-opacity='0'/><stop offset='1' stop-color='#000' stop-opacity='.15'/></linearGradient>" +
+      "</defs>" +
+      "<ellipse cx='" + cx + "' cy='" + (bot + ry + 6) + "' rx='" + (rx + 8) + "' ry='8' fill='#000' opacity='.12'/>" +
+      "<rect x='20' y='" + top + "' width='120' height='" + (bot - top) + "' fill='url(#tkBody)'/>" +
+      "<ellipse cx='" + cx + "' cy='" + bot + "' rx='" + rx + "' ry='" + ry + "' fill='url(#tkBody)'/>" +
+      "<ellipse cx='" + cx + "' cy='" + top + "' rx='" + rx + "' ry='" + ry + "' fill='#e8eff7'/>" +
+      "<g opacity='.92'>" + water + "</g>" +
+      "<rect x='20' y='" + top + "' width='120' height='" + (bot - top) + "' fill='url(#tkGlass)'/>" +
+      "<path d='M20 " + top + " V" + bot + " A" + rx + " " + ry + " 0 0 0 140 " + bot + " V" + top + "' fill='none' stroke='#6c819a' stroke-width='2'/>" +
+      "<ellipse cx='" + cx + "' cy='" + top + "' rx='" + rx + "' ry='" + ry + "' fill='none' stroke='#6c819a' stroke-width='2'/>" +
+      "<rect x='20' y='" + (top + 50) + "' width='120' height='4' fill='#000' opacity='.05'/>" +
+      "<rect x='20' y='" + (top + 110) + "' width='120' height='4' fill='#000' opacity='.05'/>" +
+      ticks +
+      "<text x='" + cx + "' y='" + (top + 90) + "' text-anchor='middle' font-size='26' font-weight='700' fill='#0b2a3f' stroke='#fff' stroke-width='3' paint-order='stroke'>" + pct + "%</text>" +
+      "<text x='" + cx + "' y='" + (top + 106) + "' text-anchor='middle' font-size='10' font-weight='600' fill='#0b2a3f' stroke='#fff' stroke-width='3' paint-order='stroke'>" + litres + " / " + cap + " L</text>" +
+    "</svg>";
+}
+
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 const tkErr = (m) => { const e = document.getElementById("tk-err"); e.textContent = m || ""; e.hidden = !m; };
 
@@ -132,6 +243,7 @@ async function submitTank(ev) {
             return tkErr(errs || j.message || "Could not add tank.");
         }
         closeTankModal();
+        toast("Tank added successfully");
         loadTanks();
     } catch (_) {
         tkErr("Network error. Please try again.");
@@ -144,17 +256,30 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTankM
 
 {% include "nav/nav.html" %}
 <div class="customer-page">
-    <div class="page-head">
-        <h1>Tanks</h1>
-        <button type="button" id="add-tank-btn" class="action-btn" onclick="openTankModal()" hidden>Add Tank</button>
+    <div class="page-head tk-head">
+        <div>
+            <h1>Tanks</h1>
+            <p class="tk-sub">Monitor water levels and tank health in real time.</p>
+        </div>
+        <div class="tk-head-actions">
+            <button type="button" class="tk-refresh" title="Refresh" aria-label="Refresh" onclick="refreshTanks(this)">&#8635;</button>
+            <button type="button" id="add-tank-btn" class="action-btn" onclick="openTankModal()" hidden>+ Add Tank</button>
+        </div>
     </div>
     <div class="tk-stats">
-        <div class="tk-stat"><span>Total tanks</span><b id="s-total">-</b></div>
-        <div class="tk-stat"><span>Average level</span><b id="s-avg">-</b></div>
-        <div class="tk-stat"><span>Stored / capacity</span><b id="s-litres">-</b></div>
+        <div class="tk-stat"><i>&#128738;</i><div><span>Total tanks</span><b id="s-total">-</b></div></div>
+        <div class="tk-stat"><i>&#128167;</i><div><span>Average level</span><b id="s-avg">-</b></div></div>
+        <div class="tk-stat"><i>&#9878;</i><div><span>Stored / capacity</span><b id="s-litres">-</b></div></div>
     </div>
     <div class="tk-row-list" id="tk-row"></div>
+    <div class="tk-details" id="tk-details" hidden></div>
+    <div class="tk-emptystate" id="tk-empty-state" hidden>
+        <div class="tk-empty-ico">&#128738;</div>
+        <h3>No tanks yet</h3>
+        <p>Tanks you add will appear here with their live water level.</p>
+    </div>
 </div>
+<div class="tk-toast" id="tk-toast" role="status" hidden></div>
 
 <div class="tk-overlay" id="tk-modal" hidden onclick="if (event.target === this) closeTankModal()">
     <form class="tk-dialog" id="tk-form" onsubmit="submitTank(event)" novalidate>
@@ -175,16 +300,57 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTankM
     </form>
 </div>
 <style>
-.tk-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
-.tk-stat { flex: 1; min-width: 160px; background: #fff; border: 1px solid #e3e8ef; border-radius: 12px; padding: 12px 16px; }
-.tk-stat span { display: block; font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; opacity: .6; }
-.tk-stat b { font-size: 1.4rem; color: #5b7cfa; }
-#add-tank-btn { display: inline-flex; align-items: center; background: #fff; border: 1.5px solid #5b7cfa; border-radius: 999px; color: #5b7cfa; padding: 9px 18px; font-weight: 600; }
-#add-tank-btn:hover { background: #5b7cfa; color: #fff; }
-.tk-row-list { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 14px; }
-.tk-chip { flex: none; padding: 9px 20px; border-radius: 999px; border: 1.5px solid #dbe3ea; background: #fff; color: #0b2a3f; font-weight: 600; cursor: pointer; }
-.tk-chip.active { background: #5b7cfa; border-color: #5b7cfa; color: #fff; }
+.tk-head { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.tk-head h1 { margin: 0; }
+.tk-sub { margin: 4px 0 0; font-size: .9rem; opacity: .65; }
+.tk-head-actions { display: flex; gap: 10px; align-items: center; }
+.tk-refresh { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid #dbe3ea; background: #fff; color: #5b7cfa; font-size: 1.2rem; cursor: pointer; transition: background .2s; }
+.tk-refresh:hover { background: #eef2ff; }
+.tk-refresh.spin { animation: tkSpin .6s linear; }
+@keyframes tkSpin { to { transform: rotate(360deg); } }
+.tk-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.tk-stat { display: flex; align-items: center; gap: 14px; background: #fff; border: 1px solid #e3e8ef; border-radius: 14px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(16,24,40,.04); }
+.tk-stat i { font-style: normal; font-size: 1.4rem; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: #eef2ff; }
+.tk-stat span { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; opacity: .6; }
+.tk-stat b { font-size: 1.45rem; color: #0b2a3f; }
+#add-tank-btn { display: inline-flex; align-items: center; background: #5b7cfa; border: 1.5px solid #5b7cfa; border-radius: 999px; color: #fff; padding: 9px 20px; font-weight: 600; box-shadow: 0 2px 6px rgba(91,124,250,.35); }
+#add-tank-btn[hidden] { display: none; }
+#add-tank-btn:hover { background: #4766e6; }
+.tk-row-list { display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 10px; margin-bottom: 14px; scroll-snap-type: x proximity; }
+.tk-chip { flex: none; min-width: 150px; text-align: left; padding: 11px 14px; border-radius: 14px; border: 1.5px solid #e3e8ef; background: #fff; color: #0b2a3f; font-weight: 600; cursor: pointer; scroll-snap-align: start; transition: transform .15s, box-shadow .15s, border-color .15s; }
+.tk-chip:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(16,24,40,.08); }
+.tk-chip.active { border-color: #5b7cfa; background: #f3f6ff; box-shadow: 0 0 0 3px rgba(91,124,250,.15); }
+.tk-chip-top { display: flex; align-items: center; gap: 8px; font-size: .92rem; }
+.tk-chip-top em { margin-left: auto; font-style: normal; font-size: .8rem; opacity: .7; }
+.tk-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.tk-chip-bar { display: block; height: 5px; background: #e6ecf3; border-radius: 99px; margin-top: 9px; overflow: hidden; }
+.tk-chip-bar u { display: block; height: 100%; background: #5b7cfa; border-radius: 99px; transition: width .5s; }
+.tk-details { background: #fff; border: 1px solid #e3e8ef; border-radius: 16px; padding: 20px 24px; box-shadow: 0 1px 3px rgba(16,24,40,.04); animation: tkIn .3s ease; }
+@keyframes tkIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.tk-dhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+.tk-dhead h3 { margin: 0; font-size: 1.25rem; }
+.tk-dhead p { margin: 4px 0 0; font-size: .88rem; opacity: .65; }
+.tk-badge { padding: 5px 14px; border-radius: 99px; font-size: .8rem; font-weight: 700; white-space: nowrap; }
+.tk-body { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; justify-content: center; }
+.tk-tank { flex: none; }
+.tk-ripple { animation: tkRipple 3s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes tkRipple { 0%,100% { transform: scale(.85); opacity: .8; } 50% { transform: scale(1.05); opacity: .2; } }
+.tk-grid { flex: 1; min-width: 260px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.tk-tile { background: #f7f9fc; border: 1px solid #e8edf4; border-radius: 12px; padding: 12px 14px; }
+.tk-tile span { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; opacity: .6; }
+.tk-tile b { display: block; margin-top: 4px; color: #0b2a3f; font-size: 1.05rem; }
+.tk-tile small { opacity: .6; font-size: .78rem; }
+.tk-skel { height: 280px; border-radius: 12px; background: linear-gradient(90deg, #eef2f7 25%, #f7f9fc 50%, #eef2f7 75%); background-size: 200% 100%; animation: tkShim 1.2s infinite; }
+@keyframes tkShim { to { background-position: -200% 0; } }
+.tk-emptystate { text-align: center; padding: 48px 16px; background: #fff; border: 1.5px dashed #dbe3ea; border-radius: 16px; }
+.tk-emptystate[hidden] { display: none; }
+.tk-empty-ico { font-size: 2.6rem; }
+.tk-emptystate h3 { margin: 8px 0 4px; }
+.tk-emptystate p { margin: 0; opacity: .65; }
 .tk-empty { opacity: .6; }
+.tk-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #0b2a3f; color: #fff; padding: 11px 22px; border-radius: 99px; font-size: .9rem; box-shadow: 0 8px 24px rgba(0,0,0,.25); z-index: 3000; animation: tkIn .25s ease; }
+.tk-toast[hidden] { display: none; }
+@media (max-width: 560px) { .tk-details { padding: 16px; } .tk-chip { min-width: 130px; } }
 .tk-overlay { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.5); padding: 16px; }
 .tk-overlay[hidden] { display: none; }
 .tk-dialog { background: #fff; color: #1f2933; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; border-radius: 14px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,.3); }

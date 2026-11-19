@@ -40,6 +40,13 @@ def get_all_devices(request):
         action_log.info(f"Listing customer devices: requested_by={user.id}")
         return base_qs.filter(user_profile__user=user)
 
+    if user.is_parent_user and user.user_admin_id:
+        action_log.info(
+            f"Listing admin devices for parent user: requested_by={user.id}, "
+            f"admin_id={user.user_admin_id}"
+        )
+        return base_qs.filter(user_profile__user_id=user.user_admin_id)
+
     action_log.warning(
         f"Device list denied: requested_by={user.id}, role={user.role}"
     )
