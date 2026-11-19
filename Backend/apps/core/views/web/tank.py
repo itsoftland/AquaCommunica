@@ -6,10 +6,15 @@ from rest_framework.permissions import IsAuthenticated
 
 from ...models.customuser import CustomUser
 from ...models.tank import Tank, TankStatus
-from ...serializers.tank import createTankSerislizer, get_owner_profile
+from ...serializers.tank import (
+    createTankSerislizer,
+    TankSerializer,
+    get_owner_profile
+)
 from ...models.audit import AuditLog
 from ...utlis.audit import record_audit
 from ...utlis.responses import error_response, success_response
+from ...services.tank import get_tank
 
 
 action_log = logging.getLogger('aquacommunica.action.log')
@@ -148,4 +153,47 @@ class TankSummaryView(APIView):
                 ) if items else 0,
                 "tanks": items,
             },
+        )
+
+
+class TankDetailsView(APIView):
+
+    permission_classes = [
+        IsAuthenticated,
+    ]
+
+    ALLOWED = [
+        CustomUser.Role.USER_ADMIN,
+        CustomUser.Role.PARENT_USER,
+        CustomUser.Role.CHILD_USER,
+    ]
+
+    def get(self, request, pk):
+
+        user = request.user
+        
+        if user.role not in self.ALLOWED:
+            action_log.warning(
+                "Tank Details denied | user_id=%s role=%s", user.id, user.role
+            )
+            return error_response(
+                message="you don't have the permission to view tanks",
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        tank = get_tank(pk=pk)
+
+        profile = get_owner_profile(user)
+        if profile is None or tank.user_profile_id != profile.id:
+            action_log.warning(
+                "Tank Details denied: not owner | user_id=%s tank_id=%s", user.id, pk
+            )
+            return error_response(
+                message="Tank not found",
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        return success_response(
+            message="Tank details fetched successfully",
+            data=TankSerializer(tank).data,
         )

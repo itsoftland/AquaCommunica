@@ -108,3 +108,25 @@ class createTankSerislizer(serializers.ModelSerializer):
             user_profile=self._profile(),
             created_by=user,
         )
+
+
+
+class TankSerializer(serializers.ModelSerializer):
+
+    class Meta:
+
+        model = Tank
+        fields = [
+            'id',
+            'name',
+            'capacity_litres',
+            'low_level_thresholds',
+            'high_level_thresholds',
+            'current_level_precent',
+            'status',
+            'last_reading_at',
+            'location',
+            'is_active',
+            'created_at'
+        ]
+        read_only_fields = fields
