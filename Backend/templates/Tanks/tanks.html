@@ -53,6 +53,28 @@ async function loadTanks() {
     document.getElementById("s-total").textContent = d.total;
     document.getElementById("s-avg").textContent = d.average_level_percent + "%";
     document.getElementById("s-litres").textContent = Math.round(d.total_current_litres) + " / " + d.total_capacity_litres + " L";
+    renderTanks(d.tanks || []);
+}
+
+let tankList = [];
+let selectedTankId = null;
+
+function renderTanks(tanks) {
+    tankList = tanks;
+    if (!tanks.some(t => t.id === selectedTankId)) selectedTankId = tanks.length ? tanks[0].id : null;
+    const row = document.getElementById("tk-row");
+    row.innerHTML = "";
+    if (!tanks.length) {
+        row.innerHTML = '<span class="tk-empty">No tanks found.</span>';
+    }
+    for (const t of tanks) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "tk-chip" + (t.id === selectedTankId ? " active" : "");
+        b.textContent = t.name;
+        b.onclick = () => { selectedTankId = t.id; renderTanks(tankList); };
+        row.appendChild(b);
+    }
 }
 
 const tkErr = (m) => { const e = document.getElementById("tk-err"); e.textContent = m || ""; e.hidden = !m; };
@@ -131,6 +153,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTankM
         <div class="tk-stat"><span>Average level</span><b id="s-avg">-</b></div>
         <div class="tk-stat"><span>Stored / capacity</span><b id="s-litres">-</b></div>
     </div>
+    <div class="tk-row-list" id="tk-row"></div>
 </div>
 
 <div class="tk-overlay" id="tk-modal" hidden onclick="if (event.target === this) closeTankModal()">
@@ -158,6 +181,10 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTankM
 .tk-stat b { font-size: 1.4rem; color: #5b7cfa; }
 #add-tank-btn { display: inline-flex; align-items: center; background: #fff; border: 1.5px solid #5b7cfa; border-radius: 999px; color: #5b7cfa; padding: 9px 18px; font-weight: 600; }
 #add-tank-btn:hover { background: #5b7cfa; color: #fff; }
+.tk-row-list { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 14px; }
+.tk-chip { flex: none; padding: 9px 20px; border-radius: 999px; border: 1.5px solid #dbe3ea; background: #fff; color: #0b2a3f; font-weight: 600; cursor: pointer; }
+.tk-chip.active { background: #5b7cfa; border-color: #5b7cfa; color: #fff; }
+.tk-empty { opacity: .6; }
 .tk-overlay { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.5); padding: 16px; }
 .tk-overlay[hidden] { display: none; }
 .tk-dialog { background: #fff; color: #1f2933; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; border-radius: 14px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,.3); }

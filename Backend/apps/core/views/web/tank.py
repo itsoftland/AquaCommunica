@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
@@ -5,7 +7,12 @@ from rest_framework.permissions import IsAuthenticated
 from ...models.customuser import CustomUser
 from ...models.tank import Tank, TankStatus
 from ...serializers.tank import createTankSerislizer, get_owner_profile
+from ...models.audit import AuditLog
+from ...utlis.audit import record_audit
 from ...utlis.responses import error_response, success_response
+
+
+action_log = logging.getLogger('aquacommunica.action.log')
 
 
 class AddTankView(APIView):
@@ -25,6 +32,9 @@ class AddTankView(APIView):
             self.PARENT_USER,
             self.USER_ADMIN,
         ]:
+            action_log.warning(
+                "Add tank denied | user_id=%s role=%s", user.id, user.role
+            )
             return error_response(
                 message="you don't have the permission to add tank",
                 status=status.HTTP_403_FORBIDDEN
@@ -39,6 +49,10 @@ class AddTankView(APIView):
 
         if not serializer.is_valid():
 
+            action_log.warning(
+                "Add tank invalid data | user_id=%s errors=%s",
+                user.id, serializer.errors,
+            )
             return error_response(
                 message="Invalid data",
                 data=serializer.errors,
@@ -46,6 +60,19 @@ class AddTankView(APIView):
             )
 
         tank = serializer.save()
+
+        action_log.info(
+            "Tank created | user_id=%s tank_id=%s name=%s",
+            user.id, tank.id, tank.name,
+        )
+        record_audit(
+            request,
+            AuditLog.Action.CREATE,
+            user=user,
+            instance=tank,
+            description=f"Tank {tank.name} created",
+            new_values={"id": tank.id, "name": tank.name},
+        )
 
         return success_response(
             message="Tank added successfully.",
@@ -73,6 +100,9 @@ class TankSummaryView(APIView):
         user = request.user
 
         if user.role not in self.ALLOWED:
+            action_log.warning(
+                "Tank summary denied | user_id=%s role=%s", user.id, user.role
+            )
             return error_response(
                 message="you don't have the permission to view tanks",
                 status=status.HTTP_403_FORBIDDEN
@@ -99,8 +129,12 @@ class TankSummaryView(APIView):
                 "capacity_litres": t.capacity_litres,
                 "last_reading_at": t.last_reading_at,
             }
-            for t in tanks.order_by("current_level_precent")
+            for t in tanks.order_by("id")
         ]
+
+        action_log.info(
+            "Tank summary fetched | user_id=%s tanks=%s", user.id, len(items)
+        )
 
         return success_response(
             message="Tank summary fetched successfully.",

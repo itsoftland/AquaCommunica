@@ -1,10 +1,13 @@
-from rest_framework import serializers
+import logging
 
-from django.db import transaction
+from rest_framework import serializers
 
 from ..models.tank import Tank
 from ..models.customuser import CustomUser
 from ..models.device import DeviceType
+
+
+action_log = logging.getLogger('aquacommunica.action.log')
 
 
 def get_owner_profile(user):
@@ -39,6 +42,10 @@ class createTankSerislizer(serializers.ModelSerializer):
         profile = get_owner_profile(self.context['request'].user)
 
         if profile is None:
+            action_log.warning(
+                "Tank serializer: no profile | user_id=%s",
+                self.context['request'].user.id,
+            )
             raise serializers.ValidationError("No profile found for this user")
         
         return profile
@@ -46,6 +53,7 @@ class createTankSerislizer(serializers.ModelSerializer):
     def validate_name(self, value):
 
         if Tank.objects.filter(user_profile=self._profile(), name=value).exists():
+            action_log.warning("Tank create rejected: duplicate name | name=%s", value)
             raise serializers.ValidationError("You already have a tank with this name")
         
         return value
@@ -56,15 +64,25 @@ class createTankSerislizer(serializers.ModelSerializer):
             return value
         
         if value.user_profile_id != self._profile().id:
+            action_log.warning(
+                "Tank create rejected: transmitter not owned | device_id=%s", value.pk
+            )
             raise serializers.ValidationError("Entered device is not in your devices")
         
         if value.device_type != DeviceType.TRANSMITTER:
+            action_log.warning(
+                "Tank create rejected: not a transmitter | device_id=%s", value.pk
+            )
             raise serializers.ValidationError("Device is not a transmitter")
         
         # if not value.is_active:
         #     raise serializers.ValidationError("Device is not active")
         
         if value.tank.filter(is_active=True).exists():
+            action_log.warning(
+                "Tank create rejected: transmitter already assigned | device_id=%s",
+                value.pk,
+            )
             raise serializers.ValidationError("Device is already assigned to a tank")
         
         return value
@@ -72,6 +90,10 @@ class createTankSerislizer(serializers.ModelSerializer):
     def validate(self, attrs):
 
         if attrs['low_level_thresholds'] >= attrs['high_level_thresholds']:
+            action_log.warning(
+                "Tank create rejected: low threshold %s >= high threshold %s",
+                attrs['low_level_thresholds'], attrs['high_level_thresholds'],
+            )
             raise serializers.ValidationError(
                 {"low_level_thresholds": "Must be less than high level threshold"}
             )
