@@ -11,6 +11,7 @@ class DeviceType(models.TextChoices):
     TRANSMITTER = 'transmitter', 'Transmitter'
     RECEIVER    = 'receiver', 'Receiver'
     GATEWAY     = 'gateway', 'Gateway'
+    PUMP_CONTROLLER = 'pump_controller', 'Pump Controller'
 
 
 class AllocationStatus(models.TextChoices):
