@@ -2,8 +2,9 @@ services:
   django:
     build: .
     container_name: aqua_django
+    command: sh -c "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8081"
     ports:
-      - "8000:8000"
+      - "8085:8081"
     env_file:
       - .env
     environment:
