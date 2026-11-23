@@ -51,5 +51,6 @@ urlpatterns = [
     path('tank-summary/', tank.TankSummaryView.as_view(), name="tank_summary"),
     path('tank-details/<int:pk>/', tank.TankDetailsView.as_view(), name="tank_deatils"),
     path('tank-active-toggle/<int:pk>/', tank.TankActiveandDeactive.as_view(), name="tank_active_toggle"),
-    
+    path('tank-device-config/<int:pk>/', tank.TankDeviceConfigView.as_view(), name="tank_device_config"),
+
 ]

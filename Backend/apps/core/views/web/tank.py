@@ -4,12 +4,21 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 
+from django.db import transaction
+
 from ...models.customuser import CustomUser
-from ...models.tank import Tank, TankStatus
+from ...models.tank import (
+    Tank, 
+    TankStatus,
+    TankDevice,
+    TankDeviceRequirement,
+    TankRoute
+)
 from ...serializers.tank import (
     createTankSerislizer,
     TankSerializer,
-    get_owner_profile
+    get_owner_profile,
+    TankDeviceConfigSerializer
 )
 from ...models.audit import AuditLog
 from ...utlis.audit import record_audit
@@ -131,6 +140,7 @@ class TankSummaryView(APIView):
                 "id": t.id,
                 "name": t.name,
                 "location": t.location,
+                "transmitter_id": t.transmitter_id,
                 "status": t.status,
                 "is_active": t.is_active,
                 "level_percent": float(t.current_level_precent),
@@ -281,3 +291,102 @@ class TankActiveandDeactive(APIView):
             message=f"Tank {state} successfully",
             data={"id": tank.id, "is_active": tank.is_active},
         )
+
+
+class TankDeviceConfigView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        user = request.user
+        if user.role not in [USER_ADMIN, PARENT_USER, CHILD_USER]:
+            return error_response(
+                message="you don't have the permission to view tank devices",
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        profile = get_owner_profile(user)
+        try:
+            tank = Tank.objects.get(pk=pk, user_profile=profile)
+        except Tank.DoesNotExist:
+            return error_response(message="Tank not found", status=status.HTTP_404_NOT_FOUND)
+
+        links = list(tank.tank_devices.select_related("device"))
+        requirements = {r.device_type: r.count for r in tank.requirements.all()}
+        devices = {}
+        for link in links:
+            devices.setdefault(link.device.device_type, []).append(
+                {"id": link.device_id, "serial_number": link.device.serial_number}
+            )
+
+        routes = list(tank.routes.all())  # ordered by direction, hop_order
+
+        def chain(direction):
+            hops = [r for r in routes if r.direction == direction]
+            if not hops:
+                return []
+            return [hops[0].source_id] + [r.destination_id for r in hops]
+
+        return success_response(
+            message="Tank device configuration fetched successfully.",
+            data={
+                "is_configured": bool(links),
+                "requirements": requirements,
+                "devices": devices,
+                "uplink": chain("uplink"),
+                "downlink": chain("downlink"),
+            },
+        )
+
+    def post(self, request, pk):
+        user = request.user
+        if user.role not in [PARENT_USER, USER_ADMIN]:
+            return error_response(
+                message="you don't have the permission to configure tank devices",
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        profile = get_owner_profile(user)
+        try:
+            tank = Tank.objects.get(pk=pk, user_profile=profile)
+        except Tank.DoesNotExist:
+            return error_response(message="Tank not found", status=status.HTTP_404_NOT_FOUND)
+
+        serializer = TankDeviceConfigSerializer(data=request.data, context={"tank": tank})
+        if not serializer.is_valid():
+            return error_response(message="Invalid data", data=serializer.errors,
+                                  status=status.HTTP_400_BAD_REQUEST)
+
+        data  = serializer.validated_data
+        found = data["_devices_by_id"]
+
+        with transaction.atomic():
+            # wipe and rebuild so re-configuring is idempotent
+            tank.requirements.all().delete()
+            tank.tank_devices.all().delete()
+            tank.routes.all().delete()
+
+            TankDeviceRequirement.objects.bulk_create([
+                TankDeviceRequirement(tank=tank, device_type=t, count=c)
+                for t, c in data["requirements"].items()
+            ])
+            TankDevice.objects.bulk_create([
+                TankDevice(tank=tank, device=found[i])
+                for ids in data["devices"].values() for i in ids
+            ])
+
+            routes = []
+            for direction, chain in (("uplink", data["uplink"]), ("downlink", data["downlink"])):
+                for n in range(len(chain) - 1):
+                    routes.append(TankRoute(
+                        tank=tank, direction=direction, hop_order=n,
+                        source=found[chain[n]], destination=found[chain[n + 1]],
+                    ))
+            TankRoute.objects.bulk_create(routes)
+
+            # keep the existing FK in sync
+            tank.transmitter = found[data["uplink"][0]]
+            tank.save(update_fields=["transmitter"])
+
+        record_audit(request, AuditLog.Action.UPDATE, user=user, instance=tank,
+                     description=f"Tank {tank.name} devices configured")
+        return success_response(message="Tank devices configured.", status=status.HTTP_200_OK)

@@ -17,6 +17,9 @@ class TankStatus(models.TextChoices):
     OVERFLOW = "overflow", "Overflow"
     OFFLINE  = "offline", "Offline"
 
+class Direction(models.TextChoices):
+        UPLINK   = 'uplink', 'Uplink'      # transmitter -> repeater(s) -> gateway -> server
+        DOWNLINK = 'downlink', 'Downlink'  # server -> receiver -> pump controller
 
 
 class Tank(models.Model):
@@ -149,3 +152,96 @@ class Tank(models.Model):
     @property
     def current_litres(self):
         return (self.capacity_litres * self.current_level_precent / Decimal('100')).quantize(Decimal('0.01'))
+
+
+class TankDeviceRequirement(models.Model):
+    """Step 1: how many devices of each type this tank needs."""
+
+    tank = models.ForeignKey(
+        Tank,
+        on_delete=models.CASCADE,
+        related_name="requirements"
+    )
+
+    device_type = models.CharField(
+        max_length=20,
+        choices=DeviceType.choices,
+        default=DeviceType.REPEATER
+    )
+
+    count = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1)]
+    )
+
+    class Meta:
+        db_table = 'tank_device_requirements'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tank', 'device_type'],
+                name='unique_requirement_per_tank_type'
+            ),
+        ]    
+
+
+class TankDevice(models.Model):
+    """Step 2: which actual devices belong to this tank."""
+
+    tank = models.ForeignKey(
+        Tank,
+        on_delete=models.CASCADE,
+        related_name="tank_devices"
+    ) 
+
+    device = models.ForeignKey(
+        Devices,
+        on_delete=models.CASCADE,
+        related_name="tank_links"
+    )
+
+    class Meta:
+        db_table = 'tank_devices'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tank', 'device'],
+                name='unique_device_per_tank'
+            ),
+        ]
+
+
+class TankRoute(models.Model):
+    """Step 3: who sends to whom (one hop per row)."""
+
+    tank = models.ForeignKey(
+        Tank, 
+        on_delete=models.CASCADE, 
+        related_name="routes"
+    )
+
+    source = models.ForeignKey(
+        Devices, 
+        on_delete=models.CASCADE, 
+        related_name="routes_out"
+    )
+
+    destination = models.ForeignKey(
+        Devices, 
+        on_delete=models.CASCADE, 
+        related_name="routes_in"
+    )
+
+    direction = models.CharField(
+        max_length=10, 
+        choices=Direction.choices
+    )
+
+    hop_order = models.PositiveSmallIntegerField()
+
+    class Meta:
+        db_table = 'tank_routes'
+        ordering = ['direction', 'hop_order']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tank', 'direction', 'source'], 
+                name='unique_hop_source'
+            ),
+        ]

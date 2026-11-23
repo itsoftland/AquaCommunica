@@ -137,7 +137,11 @@ async function loadTankDetails(id, silent) {
         "<div class='tk-dright'>" +
           (canToggle ? "<label class='tk-switch' title='" + (t.is_active ? "Deactivate" : "Activate") + " tank'><input type='checkbox' id='tk-toggle' " + (t.is_active ? "checked" : "") + " onchange='toggleTank(" + t.id + ", this)'><span class='tk-slider'></span><em>" + (t.is_active ? "Active" : "Inactive") + "</em></label>"
                       : "<span class='tk-badge' style='background:" + (t.is_active ? "#1a9e5a1f;color:#1a9e5a" : "#8a9bb01f;color:#6c819a") + "'>" + (t.is_active ? "Active" : "Inactive") + "</span>") +
-          "<span class='tk-badge' style='background:" + color + "1f;color:" + color + "'>" + esc(statusLabel(t.status)) + "</span></div></div>" +
+          "<span class='tk-badge' style='background:" + color + "1f;color:" + color + "'>" + esc(statusLabel(t.status)) + "</span>" +
+          (t.is_configured
+              ? "<button type='button' class='tk-btn ghost tk-cfg-btn' onclick='openConfigModal(" + t.id + ", \"view\")'>&#128065; View configuration</button>" +
+                (canToggle ? "<button type='button' class='tk-btn ghost tk-cfg-btn' onclick='openConfigModal(" + t.id + ", \"edit\")'>&#9998; Edit configuration</button>" : "")
+              : (canToggle ? "<button type='button' class='tk-btn ghost tk-cfg-btn' onclick='openConfigModal(" + t.id + ", \"new\")'>&#9881; Configure devices</button>" : "")) + "</div></div>" +
         "<div class='tk-body'>" +
         "<div class='tk-tank'>" + tankSvg(pct, color, t.low_level_thresholds, t.high_level_thresholds, litres, t.capacity_litres) + "</div>" +
         "<div class='tk-grid'>" +
@@ -270,7 +274,212 @@ async function submitTank(ev) {
         btn.disabled = false;
     }
 }
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTankModal(); });
+
+const TANK_CONFIG_URL = "{% url 'tank_device_config' 0 %}";
+const CFG_TYPES = [
+    { key: "transmitter", label: "Transmitter", min: 1, max: 1 },
+    { key: "repeater", label: "Repeater", min: 0, max: 2 },
+    { key: "gateway", label: "Gateway", min: 1, max: 1 },
+    { key: "receiver", label: "Receiver", min: 1, max: 1 },
+    { key: "pump_controller", label: "Pump Controller", min: 1, max: 1 },
+];
+let cfgTankId = null;
+let cfgTankTransmitterId = null;
+let cfgDevices = {};
+let cfgCounts = {};
+
+const cfgErr = (m) => { const e = document.getElementById("cfg-err"); e.textContent = m || ""; e.hidden = !m; };
+
+async function fetchAllDevices(type) {
+    const out = [];
+    let url = "{% url 'devices_list' %}?device_type=" + type + "&is_active=true";
+    while (url) {
+        const r = await fetch(url, { headers: authHdr() });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.data) break;
+        out.push(...j.data.results);
+        url = j.data.next;
+    }
+    return out;
+}
+
+let cfgMode = "new";
+let cfgInitial = {};
+
+async function openConfigModal(id, mode) {
+    cfgMode = mode || "new";
+    cfgTankId = id;
+    cfgTankTransmitterId = tankList.find(t => t.id === id)?.transmitter_id ?? null;
+    cfgCounts = {};
+    cfgInitial = {};
+    CFG_TYPES.forEach(t => cfgCounts[t.key] = t.min);
+    cfgErr("");
+    document.getElementById("cfg-title").textContent =
+        cfgMode === "view" ? "Tank Configuration" : cfgMode === "edit" ? "Edit Tank Configuration" : "Configure Tank Devices";
+    document.getElementById("cfg-submit").hidden = cfgMode === "view";
+    document.getElementById("cfg-modal").querySelector(".tk-dialog").classList.toggle("tk-wide", cfgMode === "view");
+    document.getElementById("cfg-cancel").textContent = cfgMode === "view" ? "Close" : "Cancel";
+    document.getElementById("cfg-body").innerHTML = '<div class="tk-skel" style="height:160px"></div>';
+    document.getElementById("cfg-modal").hidden = false;
+
+    let saved = null;
+    if (cfgMode !== "new") {
+        try {
+            const r = await fetch(TANK_CONFIG_URL.replace(/0\/$/, id + "/"), { headers: authHdr() });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok || !j.data) return cfgErr(j.message || "Could not load configuration.");
+            saved = j.data;
+        } catch (_) { return cfgErr("Could not load configuration."); }
+    }
+
+    if (cfgMode === "view") return renderConfigView(saved);
+
+    try {
+        const lists = await Promise.all(CFG_TYPES.map(t => fetchAllDevices(t.key)));
+        CFG_TYPES.forEach((t, i) => cfgDevices[t.key] = lists[i]);
+    } catch (_) { return cfgErr("Could not load devices."); }
+
+    if (saved) {
+        CFG_TYPES.forEach(t => {
+            const mine = saved.devices[t.key] || [];
+            if (mine.length) cfgCounts[t.key] = mine.length;
+            cfgInitial[t.key] = mine.map(d => String(d.id));
+            // saved devices may no longer be in the active list; keep them selectable
+            mine.forEach(d => {
+                if (!cfgDevices[t.key].some(x => String(x.id) === String(d.id))) cfgDevices[t.key].push(d);
+            });
+        });
+    }
+    renderConfig();
+}
+
+const CFG_ICONS = { transmitter: "&#128225;", repeater: "&#128246;", gateway: "&#127760;", receiver: "&#128251;", pump_controller: "&#9881;&#65039;" };
+
+function renderConfigView(c) {
+    const info = {};
+    CFG_TYPES.forEach(t => (c.devices[t.key] || []).forEach(d => info[d.id] = { key: t.key, type: t.label, serial: d.serial_number }));
+    const node = i => {
+        const d = info[i] || { key: "", type: "Device", serial: "#" + i };
+        return "<div class='tk-node tk-node-" + d.key + "'><span class='tk-node-ico'>" + (CFG_ICONS[d.key] || "&#128268;") + "</span>" +
+               "<small>" + esc(d.type) + "</small><b>" + esc(d.serial) + "</b></div>";
+    };
+    const flow = (title, sub, ids) =>
+        "<section class='tk-flow'><div class='tk-flow-head'><h4>" + title + "</h4><span>" + sub + "</span></div>" +
+        "<div class='tk-flow-row'>" +
+        (ids.length ? ids.map(node).join("<span class='tk-arrow'>&rarr;</span>") : "<span class='tk-empty'>Not set</span>") +
+        "</div></section>";
+    const summary = CFG_TYPES.map(t => {
+        const n = (c.devices[t.key] || []).length;
+        return n ? "<span class='tk-sum'>" + (CFG_ICONS[t.key] || "") + " " + n + " " + esc(t.label) + (n > 1 ? "s" : "") + "</span>" : "";
+    }).join("");
+    document.getElementById("cfg-body").innerHTML =
+        "<div class='tk-sums'>" + summary + "</div>" +
+        flow("Uplink", "Tank sensor &rarr; server", c.uplink) +
+        flow("Downlink", "Server &rarr; pump", c.downlink);
+}
+
+function cfgSnapshot() {
+    const snap = {};
+    document.querySelectorAll("#cfg-body select[data-type]").forEach(s => {
+        (snap[s.dataset.type] = snap[s.dataset.type] || [])[Number(s.dataset.idx)] = s.value;
+    });
+    return snap;
+}
+
+function renderConfig() {
+    const snap = document.querySelector("#cfg-body select[data-type]") ? cfgSnapshot() : cfgInitial;
+    let html = '<p class="tk-hint">Pick the devices for this tank. Data flows <b>uplink</b>: transmitter &rarr; repeaters &rarr; gateway, and <b>downlink</b>: receiver &rarr; pump controller.</p>';
+    for (const t of CFG_TYPES) {
+        const n = cfgCounts[t.key];
+        html += '<div class="tk-cfg-group"><div class="tk-cfg-head"><b>' + t.label + '</b>';
+        if (t.max > 1) {
+            html += '<span class="tk-stepper"><button type="button" onclick="cfgStep(\'' + t.key + '\',-1)">&minus;</button><em>' + n + '</em><button type="button" onclick="cfgStep(\'' + t.key + '\',1)">+</button></span>';
+        }
+        html += '</div>';
+        for (let i = 0; i < n; i++) {
+            const cur = (snap[t.key] || [])[i] || "";
+            if (t.key === "transmitter" && cfgTankTransmitterId !== null) {
+                const savedTransmitter = (cfgDevices.transmitter || []).find(
+                    d => String(d.id) === String(cfgTankTransmitterId)
+                );
+                const label = savedTransmitter
+                    ? esc(savedTransmitter.serial_number)
+                    : "Saved transmitter";
+                html += '<select data-type="transmitter" data-idx="' + i + '" disabled><option value="' +
+                    cfgTankTransmitterId + '" selected>' + label + '</option></select>';
+                continue;
+            }
+            const selectedElsewhere = new Set(
+                (snap[t.key] || []).filter((value, index) => index !== i && value).map(String)
+            );
+            html += '<select data-type="' + t.key + '" data-idx="' + i + '" onchange="cfgChanged(); renderConfig()"><option value="">Select ' + t.label.toLowerCase() + (n > 1 ? " " + (i + 1) : "") + '</option>';
+            for (const d of cfgDevices[t.key] || []) {
+                if (selectedElsewhere.has(String(d.id))) continue;
+                html += '<option value="' + d.id + '"' + (String(d.id) === String(cur) ? " selected" : "") + '>' + esc(d.serial_number) + '</option>';
+            }
+            html += '</select>';
+        }
+        html += '</div>';
+    }
+    document.getElementById("cfg-body").innerHTML = html;
+}
+function cfgStep(key, d) {
+    const t = CFG_TYPES.find(x => x.key === key);
+    cfgCounts[key] = Math.max(t.min, Math.min(t.max, cfgCounts[key] + d));
+    renderConfig();
+}
+function cfgChanged() { cfgErr(""); }
+function closeConfigModal() { document.getElementById("cfg-modal").hidden = true; }
+
+async function submitConfig(ev) {
+    ev.preventDefault();
+    cfgErr("");
+    const snap = cfgSnapshot();
+    const devices = {}, requirements = {};
+    for (const t of CFG_TYPES) {
+        const n = cfgCounts[t.key];
+        if (n < 1) continue;
+        const ids = [];
+        for (let i = 0; i < n; i++) {
+            const v = (snap[t.key] || [])[i];
+            if (!v) return cfgErr("Select all " + t.label.toLowerCase() + " devices.");
+            ids.push(Number(v));
+        }
+        devices[t.key] = ids;
+        requirements[t.key] = n;
+    }
+    const all = Object.values(devices).flat();
+    if (new Set(all).size !== all.length) return cfgErr("A device can only be selected once.");
+    const payload = {
+        requirements, devices,
+        uplink: [...devices.transmitter, ...(devices.repeater || []), ...devices.gateway],
+        downlink: [...devices.receiver, ...devices.pump_controller],
+    };
+    const btn = document.getElementById("cfg-submit");
+    btn.disabled = true;
+    try {
+        const res = await fetch(TANK_CONFIG_URL.replace(/0\/$/, cfgTankId + "/"), {
+            method: "POST",
+            headers: { ...authHdr(), "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            const errs = j.data && typeof j.data === "object"
+                ? Object.entries(j.data).map(([k, m]) => k + ": " + [].concat(m).join(" ")).join(" | ")
+                : "";
+            return cfgErr(errs || j.message || "Could not save configuration.");
+        }
+        closeConfigModal();
+        toast(j.message || "Tank devices configured");
+        loadTanks();
+    } catch (_) {
+        cfgErr("Network error. Please try again.");
+    } finally {
+        btn.disabled = false;
+    }
+}
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeTankModal(); closeConfigModal(); } });
 </script>
 
 {% include "nav/nav.html" %}
@@ -315,6 +524,18 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTankM
         <div class="tk-actions">
             <button type="button" class="tk-btn ghost" onclick="closeTankModal()">Cancel</button>
             <button type="submit" class="tk-btn primary" id="tk-submit">Add Tank</button>
+        </div>
+    </form>
+</div>
+
+<div class="tk-overlay" id="cfg-modal" hidden onclick="if (event.target === this) closeConfigModal()">
+    <form class="tk-dialog" onsubmit="submitConfig(event)" novalidate>
+        <h3 id="cfg-title">Configure Tank Devices</h3>
+        <div id="cfg-body"></div>
+        <div class="tk-err" id="cfg-err" role="alert" hidden></div>
+        <div class="tk-actions">
+            <button type="button" class="tk-btn ghost" id="cfg-cancel" onclick="closeConfigModal()">Cancel</button>
+            <button type="submit" class="tk-btn primary" id="cfg-submit">Save</button>
         </div>
     </form>
 </div>
@@ -396,5 +617,32 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTankM
 .tk-btn.ghost { background: #fff; border: 1.5px solid #dbe3ea; color: #0b2a3f; }
 .tk-btn.primary { background: #5b7cfa; border: 1.5px solid #5b7cfa; color: #fff; }
 .tk-btn:disabled { opacity: .6; cursor: progress; }
+.tk-cfg-chip { display: inline-block; padding: 4px 10px; margin: 2px 0; border-radius: 999px; background: #eef2ff; color: #3b5bdb; font-size: .85rem; }
+.tk-cfg-btn { padding: 5px 14px; font-size: .8rem; }
+.tk-dialog.tk-wide { max-width: 720px; }
+.tk-sums { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.tk-sum { padding: 5px 12px; border-radius: 999px; background: #f1f5f9; color: #334e68; font-size: .8rem; font-weight: 600; }
+.tk-flow { margin-top: 16px; padding: 14px 16px; border: 1px solid #e3e8ef; border-radius: 14px; background: linear-gradient(180deg, #fafcff, #f4f7fb); }
+.tk-flow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.tk-flow-head h4 { margin: 0; font-size: .95rem; color: #0b2a3f; }
+.tk-flow-head span { font-size: .78rem; opacity: .6; }
+.tk-flow-row { display: flex; align-items: center; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.tk-node { flex: none; min-width: 120px; padding: 12px 14px; border-radius: 12px; background: #fff; border: 1.5px solid #dbe3ea; box-shadow: 0 1px 3px rgba(16,24,40,.06); text-align: center; border-top: 4px solid #8a9bb0; }
+.tk-node-ico { display: block; font-size: 1.5rem; margin-bottom: 4px; }
+.tk-node small { display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; opacity: .6; }
+.tk-node b { display: block; margin-top: 2px; font-size: .88rem; color: #0b2a3f; word-break: break-all; }
+.tk-node-transmitter { border-top-color: #5b7cfa; }
+.tk-node-repeater { border-top-color: #f59f00; }
+.tk-node-gateway { border-top-color: #1a9e5a; }
+.tk-node-receiver { border-top-color: #12b5cb; }
+.tk-node-pump_controller { border-top-color: #e8590c; }
+.tk-arrow { flex: none; font-size: 1.3rem; color: #5b7cfa; }
+@media (max-width: 560px) { .tk-flow-row { flex-direction: column; align-items: stretch; } .tk-arrow { transform: rotate(90deg); text-align: center; } }
+.tk-hint { margin: 0 0 4px; font-size: .82rem; opacity: .7; }
+.tk-cfg-group { margin-top: 14px; }
+.tk-cfg-head { display: flex; justify-content: space-between; align-items: center; font-size: .85rem; }
+.tk-stepper { display: inline-flex; align-items: center; gap: 8px; }
+.tk-stepper button { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid #dbe3ea; background: #fff; cursor: pointer; font-weight: 700; }
+.tk-stepper em { font-style: normal; min-width: 16px; text-align: center; font-weight: 700; }
 </style>
 {% endblock %}
