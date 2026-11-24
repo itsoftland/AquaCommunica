@@ -20,6 +20,7 @@ from ...serializers.tank import (
     get_owner_profile,
     TankDeviceConfigSerializer
 )
+from ...models.device import DeviceType
 from ...models.audit import AuditLog
 from ...utlis.audit import record_audit
 from ...utlis.responses import error_response, success_response
@@ -321,7 +322,8 @@ class TankDeviceConfigView(APIView):
         routes = list(tank.routes.all())  # ordered by direction, hop_order
 
         def chain(direction):
-            hops = [r for r in routes if r.direction == direction]
+            hops = [r for r in routes
+                    if r.direction == direction and r.hop_order < TankRoute.EXTRA_HOP_ORDER]
             if not hops:
                 return []
             return [hops[0].source_id] + [r.destination_id for r in hops]
@@ -381,6 +383,20 @@ class TankDeviceConfigView(APIView):
                         tank=tank, direction=direction, hop_order=n,
                         source=found[chain[n]], destination=found[chain[n + 1]],
                     ))
+
+            # L1 repeaters not on the main chain feed the same next hop as the chain's L1
+            up = data["uplink"]
+            on_chain = set(up)
+            extra_l1 = [i for i in data["devices"].get(DeviceType.REPEATER_L1, []) if i not in on_chain]
+            if extra_l1:
+                next_hop = found[up[2]]  # chain is tx, L1, (L2 | gateway), ...
+                routes += [
+                    TankRoute(
+                        tank=tank, direction="uplink", hop_order=TankRoute.EXTRA_HOP_ORDER,
+                        source=found[i], destination=next_hop,
+                    )
+                    for i in extra_l1
+                ]
             TankRoute.objects.bulk_create(routes)
 
             # keep the existing FK in sync

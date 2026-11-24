@@ -7,7 +7,8 @@ from .customuser import CustomUser
 
 class DeviceType(models.TextChoices):
 
-    REPEATER    = 'repeater', 'Repeater'
+    REPEATER_L1 = 'repeater_l1', 'Repeater Level 1'
+    REPEATER_L2 = 'repeater_l2', 'Repeater Level 2'
     TRANSMITTER = 'transmitter', 'Transmitter'
     RECEIVER    = 'receiver', 'Receiver'
     GATEWAY     = 'gateway', 'Gateway'

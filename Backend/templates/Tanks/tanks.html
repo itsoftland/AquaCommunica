@@ -278,7 +278,8 @@ async function submitTank(ev) {
 const TANK_CONFIG_URL = "{% url 'tank_device_config' 0 %}";
 const CFG_TYPES = [
     { key: "transmitter", label: "Transmitter", min: 1, max: 1 },
-    { key: "repeater", label: "Repeater", min: 0, max: 2 },
+    { key: "repeater_l1", label: "Repeater L1", min: 0, max: 8 },
+    { key: "repeater_l2", label: "Repeater L2", min: 0, max: 1 },
     { key: "gateway", label: "Gateway", min: 1, max: 1 },
     { key: "receiver", label: "Receiver", min: 1, max: 1 },
     { key: "pump_controller", label: "Pump Controller", min: 1, max: 1 },
@@ -353,7 +354,7 @@ async function openConfigModal(id, mode) {
     renderConfig();
 }
 
-const CFG_ICONS = { transmitter: "&#128225;", repeater: "&#128246;", gateway: "&#127760;", receiver: "&#128251;", pump_controller: "&#9881;&#65039;" };
+const CFG_ICONS = { transmitter: "&#128225;", repeater_l1: "&#128246;", repeater_l2: "&#128246;", gateway: "&#127760;", receiver: "&#128251;", pump_controller: "&#9881;&#65039;" };
 
 function renderConfigView(c) {
     const info = {};
@@ -452,7 +453,7 @@ async function submitConfig(ev) {
     if (new Set(all).size !== all.length) return cfgErr("A device can only be selected once.");
     const payload = {
         requirements, devices,
-        uplink: [...devices.transmitter, ...(devices.repeater || []), ...devices.gateway],
+        uplink: [...devices.transmitter, ...(devices.repeater_l1 || []).slice(0, 1), ...(devices.repeater_l2 || []), ...devices.gateway],
         downlink: [...devices.receiver, ...devices.pump_controller],
     };
     const btn = document.getElementById("cfg-submit");
@@ -632,7 +633,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeTan
 .tk-node small { display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; opacity: .6; }
 .tk-node b { display: block; margin-top: 2px; font-size: .88rem; color: #0b2a3f; word-break: break-all; }
 .tk-node-transmitter { border-top-color: #5b7cfa; }
-.tk-node-repeater { border-top-color: #f59f00; }
+.tk-node-repeater_l1, .tk-node-repeater_l2 { border-top-color: #f59f00; }
 .tk-node-gateway { border-top-color: #1a9e5a; }
 .tk-node-receiver { border-top-color: #12b5cb; }
 .tk-node-pump_controller { border-top-color: #e8590c; }

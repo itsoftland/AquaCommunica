@@ -16,8 +16,8 @@ action_log = logging.getLogger('aquacommunica.action.log')
 
 # Topology limits (FR#1 / FR#2 specs)
 MAX_INBOUND_SLOTS         = 8   # transmitters/L1 repeaters per receiving repeater
-MAX_REPEATER_LEVELS       = 2   # L1, then L2
-MAX_REPEATERS_PER_SITE    = 9   # 8 L1 + 1 L2
+MAX_L1_REPEATERS          = 8   # level 1 repeaters per site
+MAX_L2_REPEATERS          = 1   # level 2 repeater per site (optional)
 MAX_TRANSMITTERS_PER_SITE = 64  # 8 L1 x 8 transmitters
 
 
@@ -184,8 +184,15 @@ class TankDeviceConfigSerializer(serializers.Serializer):
         up, down = attrs["uplink"], attrs["downlink"]
         if type_of(up[0]) != DeviceType.TRANSMITTER or type_of(up[-1]) != DeviceType.GATEWAY:
             raise serializers.ValidationError("Uplink must start with a transmitter and end with a gateway.")
-        if any(type_of(i) != DeviceType.REPEATER for i in up[1:-1]):
-            raise serializers.ValidationError("Only repeaters are allowed between transmitter and gateway.")
+        middle = [type_of(i) for i in up[1:-1]]
+        if middle not in ([], [DeviceType.REPEATER_L1], [DeviceType.REPEATER_L1, DeviceType.REPEATER_L2]):
+            raise serializers.ValidationError(
+                "Uplink must be transmitter -> [L1 repeater] -> [L2 repeater] -> gateway."
+            )
+        if attrs["devices"].get(DeviceType.REPEATER_L1) and DeviceType.REPEATER_L1 not in middle:
+            raise serializers.ValidationError("The uplink must pass through a level 1 repeater.")
+        if attrs["devices"].get(DeviceType.REPEATER_L2) and not attrs["devices"].get(DeviceType.REPEATER_L1):
+            raise serializers.ValidationError("A level 2 repeater requires at least one level 1 repeater.")
         if tank.transmitter_id is not None and up[0] != tank.transmitter_id:
             raise serializers.ValidationError(
                 {"uplink": "The uplink transmitter must match the tank's saved transmitter."}
@@ -219,18 +226,16 @@ class TankDeviceConfigSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 f"A site supports at most {MAX_TRANSMITTERS_PER_SITE} transmitters."
             )
-        if counts.get(DeviceType.REPEATER, 0) > MAX_REPEATERS_PER_SITE:
+        if counts.get(DeviceType.REPEATER_L1, 0) > MAX_L1_REPEATERS:
             raise serializers.ValidationError(
-                f"A site supports at most {MAX_REPEATERS_PER_SITE} repeaters."
+                f"A site supports at most {MAX_L1_REPEATERS} level 1 repeaters."
+            )
+        if counts.get(DeviceType.REPEATER_L2, 0) > MAX_L2_REPEATERS:
+            raise serializers.ValidationError(
+                f"A site supports at most {MAX_L2_REPEATERS} level 2 repeater."
             )
         if counts.get(DeviceType.GATEWAY, 0) > 1:
             raise serializers.ValidationError("Only 1 gateway is allowed per tank.")
-
-        # repeater levels (L1 -> L2) in the uplink chain
-        if len(up) - 2 > MAX_REPEATER_LEVELS:
-            raise serializers.ValidationError(
-                f"At most {MAX_REPEATER_LEVELS} repeater levels (L1, then L2) are allowed."
-            )
 
         # inbound slots: no device may receive from more than 8 sources
         inbound = {}

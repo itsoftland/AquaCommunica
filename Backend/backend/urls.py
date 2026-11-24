@@ -16,8 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.views.generic import RedirectView
 
 urlpatterns = [
+    path('', RedirectView.as_view(pattern_name='login_page', permanent=False)),
     path('admin/', admin.site.urls),
     path('AQUACOMMUNICA/web/core/', include('apps.core.urls')),
     path('AQUACOMMUNICA/license-server/', include('apps.core.license_urls')),

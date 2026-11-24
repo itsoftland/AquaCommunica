@@ -166,7 +166,7 @@ class TankDeviceRequirement(models.Model):
     device_type = models.CharField(
         max_length=20,
         choices=DeviceType.choices,
-        default=DeviceType.REPEATER
+        default=DeviceType.REPEATER_L1
     )
 
     count = models.PositiveSmallIntegerField(
@@ -233,6 +233,9 @@ class TankRoute(models.Model):
         max_length=10, 
         choices=Direction.choices
     )
+
+    # chain hops are 0..N; extra L1 repeaters feeding the next level use EXTRA_HOP_ORDER
+    EXTRA_HOP_ORDER = 100
 
     hop_order = models.PositiveSmallIntegerField()
 
