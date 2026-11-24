@@ -179,7 +179,13 @@ class TankDeviceConfigSerializer(serializers.Serializer):
                 if i not in found or found[i].device_type != dtype:
                     raise serializers.ValidationError(f"Device {i} is not a valid {dtype} for this user.")
 
-        # 3. check the chain shape
+        # 3. check the chain shape (every chain device must be a declared one)
+        for chain in (attrs["uplink"], attrs["downlink"]):
+            unknown = [i for i in chain if i not in found]
+            if unknown:
+                raise serializers.ValidationError(
+                    f"Devices {unknown} in uplink/downlink are not listed in 'devices'."
+                )
         def type_of(i): return found[i].device_type
         up, down = attrs["uplink"], attrs["downlink"]
         if type_of(up[0]) != DeviceType.TRANSMITTER or type_of(up[-1]) != DeviceType.GATEWAY:

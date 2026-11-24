@@ -99,7 +99,7 @@ class IsSuperAdmin(BasePermission):
     def has_permission(self, request, view):
 
         user = request.user
-        return user.role == "superadmin"
+        return bool(user and user.is_authenticated and user.role == "superadmin")
 
 
 class LicensePermission(BasePermission):
@@ -108,13 +108,15 @@ class LicensePermission(BasePermission):
 
         user = request.user
 
-        if not user or user.is_authenticated:
+        if not user or not user.is_authenticated:
+            return False
+
+        if user.is_superadmin:
             return True
 
-        if user.is_superadmin or user.role == "superadmin":
-            return True
-
-        profile = user.user_profile
+        # license profile belongs to the user admin (own or parent/child's admin)
+        owner = user if user.is_user_admin else user.user_admin
+        profile = getattr(owner, "user_profile", None) if owner else None
 
         if profile:
             if not profile.is_profile_active:
@@ -125,7 +127,7 @@ class LicensePermission(BasePermission):
                 self.message = f'License Expired (ID: {profile.profile_id}). Contact Administrator.'
                 return False
 
-        dealer = getattr(user, 'assigned_users', None)
+        dealer = owner.dealer if owner else None
         if dealer and not dealer.is_active:
             self.message = 'Dealer account is deactivated. Contact Administrator.'
             return False

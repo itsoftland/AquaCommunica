@@ -257,15 +257,15 @@ class TankActiveandDeactive(APIView):
 
             if level is None:
                 tank.status = TankStatus.OFFLINE
-            elif level > 100:
+            elif level >= tank.high_level_thresholds:
                 tank.status = TankStatus.OVERFLOW
-            elif level > 25:
+            elif level > tank.low_level_thresholds:
                 tank.status = TankStatus.NORMAL
-            elif level > 10:
+            elif level > tank.low_level_thresholds / 2:
                 tank.status = TankStatus.LOW
             else:
                 tank.status = TankStatus.CRITICAL
-                
+
         else:
             tank.status = TankStatus.OFFLINE
             
@@ -361,6 +361,9 @@ class TankDeviceConfigView(APIView):
         found = data["_devices_by_id"]
 
         with transaction.atomic():
+            # lock the tank so concurrent re-configs run one at a time
+            Tank.objects.select_for_update().get(pk=tank.pk)
+
             # wipe and rebuild so re-configuring is idempotent
             tank.requirements.all().delete()
             tank.tank_devices.all().delete()

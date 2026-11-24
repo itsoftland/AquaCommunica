@@ -77,7 +77,7 @@ REST_FRAMEWORK = {
 
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=120),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=env.int("ACCESS_TOKEN_MINUTES", default=120)),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 
     "ROTATE_REFRESH_TOKENS": True,
@@ -94,6 +94,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.core.middleware.LicenseValidityMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -297,11 +298,21 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # CORS (Vite React dev server)
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=["http://localhost:5173", "http://127.0.0.1:5173"],
+)
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
+
+
+# HTTPS hardening - enable these in .env for production behind HTTPS
+SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=False)
+SESSION_COOKIE_SECURE = env.bool("SECURE_COOKIES", default=False)
+CSRF_COOKIE_SECURE = env.bool("SECURE_COOKIES", default=False)
+SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
+if env.bool("BEHIND_PROXY_HTTPS", default=False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
 # Application Configuration
@@ -312,7 +323,10 @@ APP_VERSION = '1.0.0'
 
 
 # License Server Configuration
-LICENSE_SERVER_BASE_URL = 'http://202.88.237.210:8093/LicenceMgmt/public/api'
+LICENSE_SERVER_BASE_URL = env(
+    "LICENSE_SERVER_BASE_URL",
+    default='http://202.88.237.210:8093/LicenceMgmt/public/api',
+)
 PRODUCT_REGISTRATION_ENDPOINT = '/ProductRegistration'
 PRODUCT_AUTH_ENDPOINT = '/ProductAuthentication'
 
