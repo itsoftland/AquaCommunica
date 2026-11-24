@@ -35,8 +35,8 @@
         }
         if (!res.ok) return toLogin();
         const body = await res.json();
-        // only super admins and dealers may view this page
-        if (!["superadmin", "dealer"].includes(body.data.user.role)) {
+        // only super admins, dealers and executives may view this page
+        if (!["superadmin", "dealer", "executive"].includes(body.data.user.role)) {
             return window.location.replace("{% url 'dashboard' %}");
         }
     } catch (_) {

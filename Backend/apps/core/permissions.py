@@ -67,14 +67,14 @@ class CanDeleteUser(BasePermission):
 class CanManageUserProfiles(BasePermission):
     """
     Superadmin can update any user.
-    Dealer can update only user_admin accounts created by them.
+    Dealer and executive can update only profiles created by them.
     """
     def has_permission(self, request, view):
         user = request.user
 
         return (
             user.is_authenticated and
-            user.role in ["superadmin", "dealer"]
+            user.role in ["superadmin", "dealer", "executive"]
         )
 
     def has_object_permission(self, request, view, obj):
@@ -83,7 +83,7 @@ class CanManageUserProfiles(BasePermission):
         if user.role == "superadmin":
             return True
 
-        if user.role == "dealer":
+        if user.role in ["dealer", "executive"]:
 
             return (
                 obj.created_by_id == user.id

@@ -260,7 +260,7 @@ try {
         roleEl.style.cssText = "font-size: .8rem; font-weight: bold; opacity: .7; text-transform: capitalize;";
         emailEl.appendChild(roleEl);
     }
-    if (user.role === "superadmin" || user.role === "dealer") {
+    if (["superadmin", "dealer", "executive"].includes(user.role)) {
         document.getElementById("customer-link").hidden = false;
     }
     if (["superadmin", "user_admin", "executive", "dealer"].includes(user.role)) {

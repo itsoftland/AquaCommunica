@@ -1,5 +1,7 @@
 import logging
 
+from django.db.models import Q
+
 from ..models.device import Devices, AllocationStatus
 from ..utlis.device import clean_serial_numbers
 from ..models.customuser import CustomUser
@@ -28,9 +30,11 @@ def get_all_devices(request):
 
     if user.is_executive:
         action_log.info(
-            f"Listing created devices: requested_by={user.id}, role={user.role}"
+            f"Listing stock and own devices: requested_by={user.id}, role={user.role}"
         )
-        return base_qs.filter(created_by=user)
+        return base_qs.filter(
+            Q(allocation_status=AllocationStatus.STOCK) | Q(created_by=user)
+        )
 
     if user.is_dealer:
         action_log.info(f"Listing dealer devices: requested_by={user.id}")
