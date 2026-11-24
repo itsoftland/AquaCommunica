@@ -34,7 +34,7 @@ class Tank(models.Model):
         related_name="tanks"
     )
 
-    transmitter = models.ForeignKey(
+    transmitter = models.OneToOneField(
         Devices,
         on_delete=models.SET_NULL,
         null=True,
@@ -233,9 +233,6 @@ class TankRoute(models.Model):
         max_length=10, 
         choices=Direction.choices
     )
-
-    # chain hops are 0..N; extra L1 repeaters feeding the next level use EXTRA_HOP_ORDER
-    EXTRA_HOP_ORDER = 100
 
     hop_order = models.PositiveSmallIntegerField()
 

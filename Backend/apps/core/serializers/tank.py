@@ -89,7 +89,7 @@ class createTankSerislizer(serializers.ModelSerializer):
         # if not value.is_active:
         #     raise serializers.ValidationError("Device is not active")
         
-        if value.tank.filter(is_active=True).exists():
+        if Tank.objects.filter(transmitter=value).exists():
             action_log.warning(
                 "Tank create rejected: transmitter already assigned | device_id=%s",
                 value.pk,
@@ -184,18 +184,28 @@ class TankDeviceConfigSerializer(serializers.Serializer):
         up, down = attrs["uplink"], attrs["downlink"]
         if type_of(up[0]) != DeviceType.TRANSMITTER or type_of(up[-1]) != DeviceType.GATEWAY:
             raise serializers.ValidationError("Uplink must start with a transmitter and end with a gateway.")
+        # transmitter -> L1 -> L1 -> ... -> [L2] -> gateway (L1 repeaters are daisy-chained)
         middle = [type_of(i) for i in up[1:-1]]
-        if middle not in ([], [DeviceType.REPEATER_L1], [DeviceType.REPEATER_L1, DeviceType.REPEATER_L2]):
+        l1_count = len([t for t in middle if t == DeviceType.REPEATER_L1])
+        expected = [DeviceType.REPEATER_L1] * l1_count + (
+            [DeviceType.REPEATER_L2] if DeviceType.REPEATER_L2 in middle else []
+        )
+        if middle != expected:
             raise serializers.ValidationError(
-                "Uplink must be transmitter -> [L1 repeater] -> [L2 repeater] -> gateway."
+                "Uplink must be transmitter -> L1 repeater(s) -> [L2 repeater] -> gateway."
             )
-        if attrs["devices"].get(DeviceType.REPEATER_L1) and DeviceType.REPEATER_L1 not in middle:
-            raise serializers.ValidationError("The uplink must pass through a level 1 repeater.")
-        if attrs["devices"].get(DeviceType.REPEATER_L2) and not attrs["devices"].get(DeviceType.REPEATER_L1):
+        if attrs["devices"].get(DeviceType.REPEATER_L2) and not l1_count:
             raise serializers.ValidationError("A level 2 repeater requires at least one level 1 repeater.")
+        for rtype in (DeviceType.REPEATER_L1, DeviceType.REPEATER_L2):
+            if set(attrs["devices"].get(rtype, [])) != {i for i in up[1:-1] if type_of(i) == rtype}:
+                raise serializers.ValidationError("Every selected repeater must be part of the uplink chain.")
         if tank.transmitter_id is not None and up[0] != tank.transmitter_id:
             raise serializers.ValidationError(
                 {"uplink": "The uplink transmitter must match the tank's saved transmitter."}
+            )
+        if Tank.objects.filter(transmitter_id=up[0]).exclude(pk=tank.pk).exists():
+            raise serializers.ValidationError(
+                {"uplink": "This transmitter is already assigned to another tank."}
             )
         if type_of(down[0]) != DeviceType.RECEIVER or type_of(down[-1]) != DeviceType.PUMP_CONTROLLER:
             raise serializers.ValidationError("Downlink must start with a receiver and end with a pump controller.")

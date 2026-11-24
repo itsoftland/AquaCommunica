@@ -393,7 +393,7 @@ function renderConfig() {
     for (const t of CFG_TYPES) {
         const n = cfgCounts[t.key];
         html += '<div class="tk-cfg-group"><div class="tk-cfg-head"><b>' + t.label + '</b>';
-        if (t.max > 1) {
+        if (t.max > t.min) {
             html += '<span class="tk-stepper"><button type="button" onclick="cfgStep(\'' + t.key + '\',-1)">&minus;</button><em>' + n + '</em><button type="button" onclick="cfgStep(\'' + t.key + '\',1)">+</button></span>';
         }
         html += '</div>';
@@ -453,7 +453,7 @@ async function submitConfig(ev) {
     if (new Set(all).size !== all.length) return cfgErr("A device can only be selected once.");
     const payload = {
         requirements, devices,
-        uplink: [...devices.transmitter, ...(devices.repeater_l1 || []).slice(0, 1), ...(devices.repeater_l2 || []), ...devices.gateway],
+        uplink: [...devices.transmitter, ...(devices.repeater_l1 || []), ...(devices.repeater_l2 || []), ...devices.gateway],
         downlink: [...devices.receiver, ...devices.pump_controller],
     };
     const btn = document.getElementById("cfg-submit");
