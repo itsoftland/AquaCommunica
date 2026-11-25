@@ -19,6 +19,7 @@ MAX_INBOUND_SLOTS         = 8   # transmitters/L1 repeaters per receiving repeat
 MAX_L1_REPEATERS          = 8   # level 1 repeaters per site
 MAX_L2_REPEATERS          = 1   # level 2 repeater per site (optional)
 MAX_TRANSMITTERS_PER_SITE = 64  # 8 L1 x 8 transmitters
+MAX_GATEWAY_CONNECTIONS   = 4   # transmitters OR repeaters (not mixed) per gateway
 
 
 def get_owner_profile(user):
@@ -216,11 +217,64 @@ class TankDeviceConfigSerializer(serializers.Serializer):
         if type_of(down[0]) != DeviceType.RECEIVER or type_of(down[-1]) != DeviceType.PUMP_CONTROLLER:
             raise serializers.ValidationError("Downlink must start with a receiver and end with a pump controller.")
 
+        # a receiver is bound to the first pump controller it was connected to
+        bound = (
+            TankRoute.objects
+            .filter(source_id=down[0], direction="downlink")
+            .exclude(tank=tank)
+            .values_list("destination_id", flat=True)
+            .first()
+        )
+        if bound is not None and bound != down[-1]:
+            raise serializers.ValidationError({
+                "downlink": (
+                    f"Receiver {down[0]} is already connected to pump controller {bound}; "
+                    "it can only be used with that pump controller."
+                )
+            })
+
+        # gateway connection rules (shared across tanks)
+        self._check_gateway_connections(tank, up, type_of)
+
         # 4. topology limits
         self._check_limits(attrs, type_of)
 
         attrs["_devices_by_id"] = found
         return attrs
+
+    @staticmethod
+    def _check_gateway_connections(tank, up, type_of):
+        """A gateway accepts at most MAX_GATEWAY_CONNECTIONS uplink sources, and
+        all of them must be the same kind: all transmitters or all repeaters."""
+        def kind(dtype):
+            return "transmitter" if dtype == DeviceType.TRANSMITTER else "repeater"
+
+        gateway_id = up[-1]
+        new_source_id = up[-2]
+        new_kind = kind(type_of(new_source_id))
+
+        existing = (
+            TankRoute.objects
+            .filter(destination_id=gateway_id, direction="uplink")
+            .exclude(tank=tank)
+            .select_related("source")
+        )
+        sources = {r.source_id: kind(r.source.device_type) for r in existing}
+
+        existing_kinds = set(sources.values())
+        if existing_kinds and new_kind not in existing_kinds:
+            raise serializers.ValidationError({
+                "uplink": (
+                    f"This gateway is already connected to {next(iter(existing_kinds))}(s); "
+                    f"remaining connections can only be {next(iter(existing_kinds))}s, not a {new_kind}."
+                )
+            })
+
+        sources[new_source_id] = new_kind
+        if len(sources) > MAX_GATEWAY_CONNECTIONS:
+            raise serializers.ValidationError({
+                "uplink": f"A gateway supports at most {MAX_GATEWAY_CONNECTIONS} connections."
+            })
 
     @staticmethod
     def _check_limits(attrs, type_of):
